@@ -37,7 +37,8 @@ class PageHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(18, 16, 18, 12),
+      padding:
+          const EdgeInsets.fromLTRB(18, 16, 18, 12),
       child: Row(
         children: [
           if (onBack != null) ...[
@@ -47,7 +48,8 @@ class PageHeader extends StatelessWidget {
                 Icons.arrow_back_ios_new_rounded,
                 size: 18,
               ),
-              visualDensity: VisualDensity.compact,
+              visualDensity:
+                  VisualDensity.compact,
             ),
             const SizedBox(width: 4),
           ],
@@ -55,11 +57,14 @@ class PageHeader extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment:
+                  CrossAxisAlignment.start,
               children: [
                 Text(
                   title,
-                  style: RupahTheme.heading(size: 17),
+                  style: RupahTheme.heading(
+                    size: 17,
+                  ),
                 ),
                 if (subtitle != null)
                   Text(
@@ -127,7 +132,8 @@ class RupahPrimaryButton extends StatelessWidget {
                   color: RupahColors.green,
                 ),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius:
+                      BorderRadius.circular(14),
                 ),
               ),
               child: child,
@@ -138,7 +144,8 @@ class RupahPrimaryButton extends StatelessWidget {
                 backgroundColor: RupahColors.green,
                 foregroundColor: RupahColors.white,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius:
+                      BorderRadius.circular(14),
                 ),
               ),
               child: child,
@@ -220,7 +227,8 @@ class StatCard extends StatelessWidget {
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: RupahColors.white,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius:
+              BorderRadius.circular(16),
           border: Border.all(
             color: RupahColors.border,
           ),
@@ -263,7 +271,9 @@ class StatCard extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     value,
-                    style: RupahTheme.heading(size: 19),
+                    style: RupahTheme.heading(
+                      size: 19,
+                    ),
                   ),
                 ],
               ),
@@ -302,7 +312,8 @@ class MenuCard extends StatelessWidget {
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: RupahColors.white,
-          borderRadius: BorderRadius.circular(17),
+          borderRadius:
+              BorderRadius.circular(17),
           border: Border.all(
             color: RupahColors.border,
           ),
@@ -321,7 +332,8 @@ class MenuCard extends StatelessWidget {
               height: 44,
               decoration: BoxDecoration(
                 color: iconBackground,
-                borderRadius: BorderRadius.circular(13),
+                borderRadius:
+                    BorderRadius.circular(13),
               ),
               child: Icon(
                 icon,
@@ -418,9 +430,12 @@ class InfoRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 7),
+      padding: const EdgeInsets.symmetric(
+        vertical: 7,
+      ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment:
+            CrossAxisAlignment.start,
         children: [
           Icon(
             icon,

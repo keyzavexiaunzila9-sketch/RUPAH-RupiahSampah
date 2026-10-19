@@ -1,6 +1,8 @@
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../core/theme/app_theme.dart';
+import '../user/user_navigation.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -22,18 +24,25 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  // LOGIN
   void _login() {
     if (usernameController.text.trim().isEmpty ||
         passwordController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-            'Username dan password wajib diisi.',
-          ),
+          content: Text('Username dan password wajib diisi.'),
         ),
       );
       return;
     }
+
+    // MASUK KE NAVIGASI USER
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const UserNavigation(),
+      ),
+    );
   }
 
   @override
@@ -63,9 +72,7 @@ class _LoginScreenState extends State<LoginScreen> {
               width: 250,
               height: 250,
               decoration: BoxDecoration(
-                color: RupahColors.green.withValues(
-                  alpha: .55,
-                ),
+                color: RupahColors.green.withValues(alpha: 0.55),
                 shape: BoxShape.circle,
               ),
             ),
@@ -79,9 +86,7 @@ class _LoginScreenState extends State<LoginScreen> {
               width: 250,
               height: 250,
               decoration: BoxDecoration(
-                color: RupahColors.green.withValues(
-                  alpha: .55,
-                ),
+                color: RupahColors.green.withValues(alpha: 0.55),
                 shape: BoxShape.circle,
               ),
             ),
@@ -100,8 +105,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     maxWidth: 430,
                   ),
                   child: Column(
-                    crossAxisAlignment:
-                        CrossAxisAlignment.stretch,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       const SizedBox(height: 70),
 
@@ -117,7 +121,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                       const SizedBox(height: 4),
 
-                      // LOGIN
+                      // JUDUL LOGIN
                       Text(
                         'Login',
                         style: GoogleFonts.poppins(
@@ -152,25 +156,19 @@ class _LoginScreenState extends State<LoginScreen> {
                         child: FilledButton(
                           onPressed: _login,
                           style: FilledButton.styleFrom(
-                            backgroundColor:
-                                RupahColors.green,
-                            foregroundColor:
-                                RupahColors.white,
+                            backgroundColor: RupahColors.green,
+                            foregroundColor: RupahColors.white,
                             elevation: 0,
-                            shape:
-                                RoundedRectangleBorder(
-                              borderRadius:
-                                  BorderRadius.circular(8),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
                             ),
                           ),
                           child: Text(
                             'Login',
                             style: GoogleFonts.dmSans(
                               fontSize: 14,
-                              fontWeight:
-                                  FontWeight.w700,
-                              color:
-                                  RupahColors.white,
+                              fontWeight: FontWeight.w700,
+                              color: RupahColors.white,
                             ),
                           ),
                         ),
@@ -185,9 +183,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         style: GoogleFonts.dmSans(
                           fontSize: 11,
                           fontWeight: FontWeight.w400,
-                          color: Colors.white.withValues(
-                            alpha: .82,
-                          ),
+                          color: Colors.white.withValues(alpha: 0.82),
                         ),
                       ),
                     ],
@@ -201,7 +197,7 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // FIELD USERNAME & PASSWORD
+  // FIELD USERNAME DAN PASSWORD
   Widget _field(
     String label,
     TextEditingController controller, {
@@ -214,9 +210,7 @@ class _LoginScreenState extends State<LoginScreen> {
         borderRadius: BorderRadius.circular(8),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(
-              alpha: 0.18,
-            ),
+            color: Colors.black.withValues(alpha: 0.18),
             blurRadius: 4,
             offset: const Offset(0, 2),
           ),
@@ -237,31 +231,24 @@ class _LoginScreenState extends State<LoginScreen> {
             fontWeight: FontWeight.w400,
             color: const Color(0xFF999999),
           ),
-
           filled: true,
           fillColor: Colors.white,
-
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
             borderSide: BorderSide.none,
           ),
-
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
             borderSide: BorderSide.none,
           ),
-
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
             borderSide: BorderSide.none,
           ),
-
-          contentPadding:
-              const EdgeInsets.symmetric(
+          contentPadding: const EdgeInsets.symmetric(
             horizontal: 10,
             vertical: 13,
           ),
-
           suffixIcon: password
               ? IconButton(
                   onPressed: () {

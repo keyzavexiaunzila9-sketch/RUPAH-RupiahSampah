@@ -20,7 +20,8 @@ class RupahTheme {
   static ThemeData light() {
     final base = ThemeData(
       useMaterial3: true,
-      scaffoldBackgroundColor: RupahColors.background,
+      scaffoldBackgroundColor:
+          RupahColors.background,
       colorScheme: ColorScheme.fromSeed(
         seedColor: RupahColors.green,
         primary: RupahColors.green,
@@ -30,7 +31,10 @@ class RupahTheme {
     );
 
     return base.copyWith(
-      textTheme: GoogleFonts.dmSansTextTheme(base.textTheme).apply(
+      textTheme:
+          GoogleFonts.dmSansTextTheme(
+        base.textTheme,
+      ).apply(
         bodyColor: RupahColors.text,
         displayColor: RupahColors.text,
       ),
@@ -45,27 +49,32 @@ class RupahTheme {
           color: RupahColors.text,
         ),
       ),
-      inputDecorationTheme: InputDecorationTheme(
+      inputDecorationTheme:
+          InputDecorationTheme(
         filled: true,
         fillColor: RupahColors.white,
-        contentPadding: const EdgeInsets.symmetric(
+        contentPadding:
+            const EdgeInsets.symmetric(
           horizontal: 16,
           vertical: 14,
         ),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius:
+              BorderRadius.circular(14),
           borderSide: const BorderSide(
             color: RupahColors.border,
           ),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius:
+              BorderRadius.circular(14),
           borderSide: const BorderSide(
             color: RupahColors.border,
           ),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius:
+              BorderRadius.circular(14),
           borderSide: const BorderSide(
             color: RupahColors.green,
             width: 1.4,

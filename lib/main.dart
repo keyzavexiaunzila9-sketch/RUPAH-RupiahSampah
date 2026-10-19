@@ -1,5 +1,8 @@
-  import 'package:flutter/material.dart';
-  import 'auth/splash_screen.dart';
+import 'package:flutter/material.dart';
+import 'user/user_app.dart';
+
+
+
   void main() {
     runApp(const MyApp());
   }
@@ -30,7 +33,7 @@
           // tested with just a hot reload.
           colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         ),
-        home: SplashScreen(),
+        home: const RupahUserApp(),
       );
     }
   }
