@@ -9,7 +9,11 @@ class RiwayatScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF6F8FD),
       appBar: AppBar(
+        backgroundColor: const Color(0xFFF6F8FD),
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
         leadingWidth: 62,
         leading: const Padding(
           padding: EdgeInsets.only(left: 14),
@@ -21,71 +25,150 @@ class RiwayatScreen extends StatelessWidget {
             Text(
               'Riwayat Setor Kelas',
               style: RupahTheme.heading(
-                size: 17,
+                size: 18,
                 color: RupahColors.green,
               ),
             ),
             Text(
               'Kelas XI RPL 1',
               style: RupahTheme.body(
-                size: 9.5,
+                size: 12,
                 color: RupahColors.muted,
               ),
             ),
           ],
         ),
       ),
+
       body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 22),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 22),
         child: Column(
           children: [
+            // KARTU TOTAL KAS
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.all(15),
+              padding: const EdgeInsets.all(22),
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(18),
+                borderRadius: BorderRadius.circular(25),
                 gradient: const LinearGradient(
                   colors: [
-                    Color(0xFF4EA49A),
-                    RupahColors.green,
+                    Color(0xFF006B45),
+                    Color(0xFF00856C),
+                    Color(0xFF006D68),
                   ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF006B45).withOpacity(0.20),
+                    blurRadius: 18,
+                    offset: const Offset(0, 9),
+                  ),
+                ],
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Stack(
                 children: [
-                  Text(
-                    'Total Kas Terkumpul dari Sampah',
-                    style: RupahTheme.body(
-                      size: 10.5,
-                      color: Colors.white.withValues(alpha: 0.82),
+                  // Hiasan background
+                  Positioned(
+                    right: -35,
+                    bottom: -45,
+                    child: Icon(
+                      Icons.eco_outlined,
+                      size: 155,
+                      color: Colors.white.withOpacity(0.10),
                     ),
                   ),
-                  Text(
-                    'Rp 127.500',
-                    style: RupahTheme.heading(
-                      size: 23,
-                      color: RupahColors.white,
-                    ),
-                  ),
-                  const SizedBox(height: 13),
-                  Row(
+
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: _summary('Total Berat', '42,5 Kg'),
+                      const SizedBox(height: 8),
+
+                      // Judul saldo
+                      Text(
+                        'Total Kas Terkumpul dari Sampah',
+                        style: RupahTheme.body(
+                          size: 14,
+                          color: Colors.white.withOpacity(0.85),
+                        ),
                       ),
-                      Expanded(
-                        child: _summary('Total Setoran', '14 kali'),
+
+                      const SizedBox(height: 7),
+
+                      // Nominal saldo
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            'Rp 127.500',
+                            style: RupahTheme.heading(
+                              size: 26,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(width: 7),
+                          const Padding(
+                            padding: EdgeInsets.only(bottom: 4),
+                            child: Text(
+                              'IDR',
+                              style: TextStyle(
+                                color: Color(0xFF8CF5C1),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                      Expanded(
-                        child: _summary('Paling Sering', 'Plastik PET'),
+
+                      const SizedBox(height: 18),
+
+                      // Garis pembatas
+                      Divider(
+                        color: Colors.white.withOpacity(0.25),
+                        thickness: 1,
+                      ),
+
+                      const SizedBox(height: 7),
+
+                      // Statistik ringkasan
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _summary(
+                              'Total Berat',
+                              '42,5',
+                              'Kg',
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: _summary(
+                              'Total Setoran',
+                              '14',
+                              'Kali',
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: _summary(
+                              'Paling Sering',
+                              'Plastik PET',
+                              '',
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 14),
+
+            const SizedBox(height: 20),
+
+            // DAFTAR RIWAYAT SETORAN
             _historyCard(
               context,
               date: '30 Sep 2024 • 09:30 WIB',
@@ -98,6 +181,7 @@ class RiwayatScreen extends StatelessWidget {
               detailCategory: 'Kertas',
               detailWeight: 4.5,
             ),
+
             _historyCard(
               context,
               date: '10 Oct 2024 • 08:30 WIB',
@@ -110,6 +194,7 @@ class RiwayatScreen extends StatelessWidget {
               detailCategory: 'Logam',
               detailWeight: 1.5,
             ),
+
             _historyCard(
               context,
               date: '05 Oct 2024 • 12:30 WIB',
@@ -128,30 +213,62 @@ class RiwayatScreen extends StatelessWidget {
     );
   }
 
-  Widget _summary(String title, String value) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: RupahTheme.body(
-            size: 9,
-            color: Colors.white.withValues(alpha: 0.7),
+  // WIDGET RINGKASAN STATISTIK
+  Widget _summary(String title, String value, String satuan) {
+    return Container(
+      height: 88,
+      padding: const EdgeInsets.symmetric(
+        horizontal: 10,
+        vertical: 12,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.9),
+              fontSize: 12,
+            ),
           ),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          value,
-          style: RupahTheme.body(
-            size: 12,
-            color: RupahColors.white,
-            weight: FontWeight.w700,
+          const SizedBox(height: 6),
+          RichText(
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            text: TextSpan(
+              children: [
+                TextSpan(
+                  text: value,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                if (satuan.isNotEmpty)
+                  TextSpan(
+                    text: ' $satuan',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                    ),
+                  ),
+              ],
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
+  // WIDGET KARTU RIWAYAT
   Widget _historyCard(
     BuildContext context, {
     required String date,
@@ -185,6 +302,13 @@ class RiwayatScreen extends StatelessWidget {
           color: RupahColors.white,
           borderRadius: BorderRadius.circular(17),
           border: Border.all(color: RupahColors.border),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.025),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
+            ),
+          ],
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -203,6 +327,7 @@ class RiwayatScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 10),
+
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -210,36 +335,40 @@ class RiwayatScreen extends StatelessWidget {
                   Text(
                     date,
                     style: RupahTheme.body(
-                      size: 9.5,
+                      size: 12,
                       color: RupahColors.muted,
                     ),
                   ),
                   const SizedBox(height: 5),
+
                   Text(
                     title,
                     style: RupahTheme.body(
-                      size: 12.5,
+                      size: 14,
                       weight: FontWeight.w700,
                     ),
                   ),
                   const SizedBox(height: 4),
+
                   Text(
                     '$category • $weight • $price',
                     style: RupahTheme.body(
-                      size: 10,
+                      size: 12,
                       color: RupahColors.muted,
                     ),
                   ),
                   const SizedBox(height: 5),
+
                   Text(
                     'Kas bertambah $reward',
                     style: RupahTheme.body(
-                      size: 10,
+                      size: 12,
                       color: RupahColors.green,
                       weight: FontWeight.w700,
                     ),
                   ),
                   const SizedBox(height: 5),
+
                   const Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -252,7 +381,7 @@ class RiwayatScreen extends StatelessWidget {
                       Text(
                         'Terverifikasi',
                         style: TextStyle(
-                          fontSize: 10,
+                          fontSize: 12,
                           color: RupahColors.green,
                         ),
                       ),
@@ -261,6 +390,7 @@ class RiwayatScreen extends StatelessWidget {
                 ],
               ),
             ),
+
             const Icon(
               Icons.chevron_right,
               color: RupahColors.muted,

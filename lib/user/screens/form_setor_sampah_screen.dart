@@ -172,14 +172,14 @@ class _FormSetorSampahScreenState
             Text(
               'Form Setor Sampah',
               style: RupahTheme.heading(
-                size: 15,
+                size: 14,
                 color: darkGreen,
               ),
             ),
             const Text(
               'BANK SAMPAH DIGITAL',
               style: TextStyle(
-                fontSize: 8,
+                fontSize: 12,
                 color: muted,
               ),
             ),
@@ -216,7 +216,7 @@ class _FormSetorSampahScreenState
                         Text(
                           'Ubah Sampah Jadi Berkah Kelas!',
                           style: TextStyle(
-                            fontSize: 10,
+                            fontSize: 14,
                             fontWeight: FontWeight.bold,
                             color: darkGreen,
                           ),
@@ -226,7 +226,7 @@ class _FormSetorSampahScreenState
                           'Pastikan sampah dipilah dengan benar dan '
                           'difoto jelas untuk mempermudah verifikasi petugas.',
                           style: TextStyle(
-                            fontSize: 8,
+                            fontSize: 12,
                             height: 1.4,
                             color: muted,
                           ),
@@ -254,7 +254,7 @@ class _FormSetorSampahScreenState
                   Expanded(
                     child: Text(
                       'Kelas XI RPL 1',
-                      style: TextStyle(fontSize: 10, color: ink),
+                      style: TextStyle(fontSize: 12, color: ink),
                     ),
                   ),
                   Icon(
@@ -272,7 +272,7 @@ class _FormSetorSampahScreenState
             _label('Nama Sampah'),
             TextFormField(
               controller: nameController,
-              style: const TextStyle(fontSize: 10),
+              style: const TextStyle(fontSize: 12),
               decoration: _inputDecoration(
                 hint: 'Masukkan nama sampah',
               ),
@@ -293,7 +293,7 @@ class _FormSetorSampahScreenState
                 _label('Kategori Sampah'),
                 const Text(
                   'Pilih salah satu',
-                  style: TextStyle(fontSize: 7, color: muted),
+                  style: TextStyle(fontSize: 12, color: muted),
                 ),
               ],
             ),
@@ -350,7 +350,7 @@ class _FormSetorSampahScreenState
                                 weight % 1 == 0 ? 0 : 1,
                               ),
                               style: const TextStyle(
-                                fontSize: 16,
+                                fontSize: 14,
                                 color: darkGreen,
                                 fontWeight: FontWeight.bold,
                               ),
@@ -358,7 +358,7 @@ class _FormSetorSampahScreenState
                             const SizedBox(width: 7),
                             const Text(
                               'Kg',
-                              style: TextStyle(fontSize: 8, color: ink),
+                              style: TextStyle(fontSize: 12, color: ink),
                             ),
                           ],
                         ),
@@ -388,7 +388,7 @@ class _FormSetorSampahScreenState
                           child: Text(
                             'Estimasi Reward:',
                             style: TextStyle(
-                              fontSize: 8,
+                              fontSize: 12,
                               color: ink,
                             ),
                           ),
@@ -399,7 +399,7 @@ class _FormSetorSampahScreenState
                             Text(
                               '+Rp ${(pricePerKg * weight).round()}',
                               style: const TextStyle(
-                                fontSize: 9,
+                                fontSize: 12,
                                 color: darkGreen,
                                 fontWeight: FontWeight.bold,
                               ),
@@ -407,7 +407,7 @@ class _FormSetorSampahScreenState
                             Text(
                               '(Rp $pricePerKg/Kg)',
                               style: const TextStyle(
-                                fontSize: 7,
+                                fontSize: 12,
                                 color: muted,
                               ),
                             ),
@@ -472,7 +472,7 @@ class _FormSetorSampahScreenState
                                     ),
                                     label: const Text(
                                       'Ganti Foto',
-                                      style: TextStyle(fontSize: 9),
+                                      style: TextStyle(fontSize: 12),
                                     ),
                                     style: FilledButton.styleFrom(
                                       backgroundColor: ink,
@@ -497,7 +497,7 @@ class _FormSetorSampahScreenState
                                 Text(
                                   'FOTO TERVERIFIKASI',
                                   style: TextStyle(
-                                    fontSize: 7,
+                                    fontSize: 12,
                                     color: darkGreen,
                                     fontWeight: FontWeight.bold,
                                   ),
@@ -506,7 +506,7 @@ class _FormSetorSampahScreenState
                                 Text(
                                   'Ambil foto sampah dan timbangan',
                                   style: TextStyle(
-                                    fontSize: 8,
+                                    fontSize: 12,
                                     color: ink,
                                   ),
                                 ),
@@ -516,7 +516,7 @@ class _FormSetorSampahScreenState
                                   'bersih dari sisa cairan.',
                                   textAlign: TextAlign.center,
                                   style: TextStyle(
-                                    fontSize: 7,
+                                    fontSize: 12,
                                     color: muted,
                                   ),
                                 ),
@@ -544,7 +544,7 @@ class _FormSetorSampahScreenState
                       child: Text(
                         formattedDate,
                         style: const TextStyle(
-                          fontSize: 9,
+                          fontSize: 12,
                           color: ink,
                         ),
                       ),
@@ -566,7 +566,7 @@ class _FormSetorSampahScreenState
             TextFormField(
               controller: noteController,
               maxLines: 2,
-              style: const TextStyle(fontSize: 9),
+              style: const TextStyle(fontSize: 12),
               decoration: _inputDecoration(
                 hint: 'Tulis kondisi barang dan informasi tambahan.',
               ),
@@ -590,7 +590,7 @@ class _FormSetorSampahScreenState
                   label: const Text(
                     'Kirim Setoran',
                     style: TextStyle(
-                      fontSize: 10,
+                      fontSize: 12,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -618,7 +618,7 @@ class _FormSetorSampahScreenState
         text,
         style: const TextStyle(
           color: ink,
-          fontSize: 9,
+          fontSize: 14,
           fontWeight: FontWeight.bold,
         ),
       ),
@@ -678,7 +678,7 @@ class _FormSetorSampahScreenState
               category,
               textAlign: TextAlign.center,
               style: TextStyle(
-                fontSize: 8,
+                fontSize: 12,
                 color: selected ? darkGreen : ink,
                 fontWeight: selected ? FontWeight.bold : FontWeight.normal,
               ),
@@ -718,7 +718,7 @@ class _FormSetorSampahScreenState
     return InputDecoration(
       hintText: hint,
       hintStyle: const TextStyle(
-        fontSize: 9,
+        fontSize: 12,
         color: muted,
       ),
       filled: true,

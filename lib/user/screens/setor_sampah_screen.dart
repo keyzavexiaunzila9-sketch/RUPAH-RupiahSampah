@@ -30,7 +30,7 @@ class SetorSampahScreen extends StatelessWidget {
             const Text(
               'Setor Sampah',
               style: TextStyle(
-                fontSize: 20,
+                fontSize: 14,
                 color: green,
                 fontWeight: FontWeight.bold,
               ),
@@ -55,10 +55,6 @@ class SetorSampahScreen extends StatelessWidget {
               color: Colors.white.withValues(alpha: 0.65),
               borderRadius: BorderRadius.circular(10),
             ),
-          
-                
-              
-            
           ),
 
           const SizedBox(height: 8),
@@ -102,7 +98,7 @@ class SetorSampahScreen extends StatelessWidget {
                       'Yuk, Setor Sampahmu!',
                       style: TextStyle(
                         color: Colors.white,
-                        fontSize: 16,
+                        fontSize: 14,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
@@ -130,7 +126,7 @@ class SetorSampahScreen extends StatelessWidget {
             'Katalog Tarif Sampah',
             style: TextStyle(
               color: ink,
-              fontSize: 16,
+              fontSize: 14,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -139,7 +135,7 @@ class SetorSampahScreen extends StatelessWidget {
             'Update harian Bank Sampah Sekolah',
             style: TextStyle(
               color: muted,
-              fontSize: 10,
+              fontSize: 12,
             ),
           ),
 
@@ -318,7 +314,7 @@ class SetorSampahScreen extends StatelessWidget {
                   title,
                   style: const TextStyle(
                     color: ink,
-                    fontSize: 10,
+                    fontSize: 14,
                     fontWeight: FontWeight.w800,
                   ),
                 ),

@@ -1,5 +1,7 @@
 
 import 'package:flutter/material.dart';
+import 'setor_sampah_screen.dart';
+import 'profil_user_screen.dart';
 
 class DashboardScreens extends StatelessWidget {
   const DashboardScreens({super.key});
@@ -7,15 +9,6 @@ class DashboardScreens extends StatelessWidget {
   static const Color hijau = Color(0xFF2D9565);
   static const Color background = Color(0xFFF6F8FC);
   static const Color teks = Color(0xFF172235);
-
-  void tampilPesan(BuildContext context, String pesan) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(pesan),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -51,14 +44,14 @@ class DashboardScreens extends StatelessWidget {
                         'Halo, 👋',
                         style: TextStyle(
                           color: Colors.black54,
-                          fontSize: 13,
+                          fontSize: 12,
                         ),
                       ),
                       Text(
                         'Kelas XI RPL 1',
                         style: TextStyle(
                           color: teks,
-                          fontSize: 18,
+                          fontSize: 14,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -158,7 +151,7 @@ class DashboardScreens extends StatelessWidget {
                           'AKTIF & TERVERIFIKASI',
                           style: TextStyle(
                             color: Color(0xFFB8FFD2),
-                            fontSize: 9,
+                            fontSize: 11,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
@@ -201,7 +194,7 @@ class DashboardScreens extends StatelessWidget {
               const Text(
                 'Menu Utama',
                 style: TextStyle(
-                  fontSize: 18,
+                  fontSize: 14,
                   fontWeight: FontWeight.bold,
                   color: teks,
                 ),
@@ -209,6 +202,7 @@ class DashboardScreens extends StatelessWidget {
 
               const SizedBox(height: 12),
 
+              // MENU SETOR SAMPAH
               menuUtama(
                 context,
                 icon: Icons.delete_outline,
@@ -216,11 +210,20 @@ class DashboardScreens extends StatelessWidget {
                 deskripsi: 'Kirim setoran baru',
                 warna: const Color(0xFFD8FBE4),
                 warnaIcon: const Color(0xFF168451),
-                pesan: 'Halaman Setor Sampah akan dibuat berikutnya.',
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) =>
+                          const SetorSampahScreen(),
+                    ),
+                  );
+                },
               ),
 
               const SizedBox(height: 12),
 
+              // MENU PROFIL KELAS
               menuUtama(
                 context,
                 icon: Icons.person,
@@ -228,7 +231,15 @@ class DashboardScreens extends StatelessWidget {
                 deskripsi: 'Pengaturan akun',
                 warna: const Color(0xFFDCE9FF),
                 warnaIcon: const Color(0xFF527DB8),
-                pesan: 'Halaman Profil User akan dibuat berikutnya.',
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) =>
+                          ProfilUserScreen(),
+                    ),
+                  );
+                },
               ),
 
               const SizedBox(height: 36),
@@ -294,6 +305,7 @@ class DashboardScreens extends StatelessWidget {
     );
   }
 
+  // KARTU STATISTIK
   Widget kartuStatistik({
     required IconData icon,
     required String judul,
@@ -307,7 +319,9 @@ class DashboardScreens extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(19),
-        border: Border.all(color: const Color(0xFFE9EDF2)),
+        border: Border.all(
+          color: const Color(0xFFE9EDF2),
+        ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.035),
@@ -321,7 +335,11 @@ class DashboardScreens extends StatelessWidget {
           CircleAvatar(
             radius: 22,
             backgroundColor: warna,
-            child: Icon(icon, color: warnaIcon, size: 23),
+            child: Icon(
+              icon,
+              color: warnaIcon,
+              size: 23,
+            ),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -332,7 +350,7 @@ class DashboardScreens extends StatelessWidget {
                 Text(
                   judul,
                   style: const TextStyle(
-                    fontSize: 11,
+                    fontSize: 12,
                     color: Colors.black54,
                   ),
                 ),
@@ -340,7 +358,7 @@ class DashboardScreens extends StatelessWidget {
                 Text(
                   nilai,
                   style: const TextStyle(
-                    fontSize: 17,
+                    fontSize: 12,
                     fontWeight: FontWeight.bold,
                     color: teks,
                   ),
@@ -353,6 +371,7 @@ class DashboardScreens extends StatelessWidget {
     );
   }
 
+  // CARD MENU UTAMA
   Widget menuUtama(
     BuildContext context, {
     required IconData icon,
@@ -360,20 +379,22 @@ class DashboardScreens extends StatelessWidget {
     required String deskripsi,
     required Color warna,
     required Color warnaIcon,
-    required String pesan,
+    required VoidCallback onTap,
   }) {
     return Material(
       color: Colors.white,
       borderRadius: BorderRadius.circular(19),
       child: InkWell(
         borderRadius: BorderRadius.circular(19),
-        onTap: () => tampilPesan(context, pesan),
+        onTap: onTap,
         child: Container(
           width: double.infinity,
           padding: const EdgeInsets.all(15),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(19),
-            border: Border.all(color: const Color(0xFFE0E8E2)),
+            border: Border.all(
+              color: const Color(0xFFE0E8E2),
+            ),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withOpacity(0.025),
@@ -392,7 +413,11 @@ class DashboardScreens extends StatelessWidget {
                   color: warna,
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(icon, color: warnaIcon, size: 23),
+                child: Icon(
+                  icon,
+                  color: warnaIcon,
+                  size: 23,
+                ),
               ),
               const SizedBox(height: 12),
               Text(

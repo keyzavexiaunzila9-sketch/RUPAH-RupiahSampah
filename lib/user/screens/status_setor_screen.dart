@@ -1,4 +1,3 @@
-
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import '../../core/theme/app_theme.dart';
@@ -39,7 +38,7 @@ class StatusSetorScreen extends StatelessWidget {
         title: Text(
           'Status Setoran',
           style: RupahTheme.heading(
-            size: 18,
+            size: 14,
             color: RupahColors.green,
           ),
         ),
@@ -77,7 +76,7 @@ class StatusSetorScreen extends StatelessWidget {
                     'Setoran Berhasil Dikirim!',
                     textAlign: TextAlign.center,
                     style: RupahTheme.heading(
-                      size: 19,
+                      size: 14,
                       color: RupahColors.green,
                     ),
                   ),
@@ -86,7 +85,7 @@ class StatusSetorScreen extends StatelessWidget {
                     'Setoranmu sudah dikirim dan menunggu verifikasi admin.',
                     textAlign: TextAlign.center,
                     style: RupahTheme.body(
-                      size: 11.5,
+                      size: 12,
                       color: RupahColors.muted,
                     ),
                   ),
@@ -102,7 +101,7 @@ class StatusSetorScreen extends StatelessWidget {
                     'Estimasi verifikasi maksimal 24 jam kerja',
                     textAlign: TextAlign.center,
                     style: RupahTheme.body(
-                      size: 10,
+                      size: 12,
                       color: RupahColors.muted,
                     ),
                   ),
@@ -112,6 +111,7 @@ class StatusSetorScreen extends StatelessWidget {
 
             const SizedBox(height: 22),
 
+            // Ringkasan Setoran
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(16),
@@ -125,7 +125,7 @@ class StatusSetorScreen extends StatelessWidget {
                 children: [
                   Text(
                     'Ringkasan Setoran',
-                    style: RupahTheme.heading(size: 16),
+                    style: RupahTheme.heading(size: 14),
                   ),
                   const SizedBox(height: 14),
                   _detailRow('Kategori Sampah', category),
@@ -136,6 +136,7 @@ class StatusSetorScreen extends StatelessWidget {
                   if (note.trim().isNotEmpty)
                     _detailRow('Catatan', note.trim()),
 
+                  // Foto bukti setoran
                   if (photoBytes != null) ...[
                     const SizedBox(height: 14),
                     Text(
@@ -162,6 +163,7 @@ class StatusSetorScreen extends StatelessWidget {
 
             const SizedBox(height: 18),
 
+            // Proses Verifikasi
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(16),
@@ -175,7 +177,7 @@ class StatusSetorScreen extends StatelessWidget {
                 children: [
                   Text(
                     'Proses Verifikasi Setoran',
-                    style: RupahTheme.heading(size: 16),
+                    style: RupahTheme.heading(size: 14),
                   ),
                   const SizedBox(height: 13),
                   _timeline(
@@ -205,6 +207,7 @@ class StatusSetorScreen extends StatelessWidget {
 
             const SizedBox(height: 18),
 
+            // Tombol Detail
             RupahPrimaryButton(
               label: 'Lihat Detail Setoran',
               icon: Icons.arrow_forward_rounded,
@@ -215,6 +218,8 @@ class StatusSetorScreen extends StatelessWidget {
                     builder: (_) => DetailSetoranScreen(
                       category: category,
                       weight: weight,
+                      note: note,
+                      photoBytes: photoBytes,
                     ),
                   ),
                 );
@@ -223,6 +228,7 @@ class StatusSetorScreen extends StatelessWidget {
 
             const SizedBox(height: 9),
 
+            // Tombol Dashboard
             RupahPrimaryButton(
               label: 'Kembali ke Dashboard',
               icon: Icons.home_outlined,
@@ -254,7 +260,7 @@ class StatusSetorScreen extends StatelessWidget {
             child: Text(
               title,
               style: RupahTheme.body(
-                size: 11,
+                size: 12,
                 color: RupahColors.muted,
               ),
             ),
@@ -333,7 +339,7 @@ class StatusSetorScreen extends StatelessWidget {
                       Text(
                         meta,
                         style: RupahTheme.body(
-                          size: 9.5,
+                          size: 12,
                           color: color,
                           weight: FontWeight.w700,
                         ),
@@ -344,7 +350,7 @@ class StatusSetorScreen extends StatelessWidget {
                   Text(
                     subtitle,
                     style: RupahTheme.body(
-                      size: 10.5,
+                      size: 12,
                       color: RupahColors.muted,
                     ),
                   ),

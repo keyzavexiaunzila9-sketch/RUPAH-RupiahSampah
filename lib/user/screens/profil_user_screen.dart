@@ -18,7 +18,7 @@ class ProfilUserScreen extends StatelessWidget {
         title: Text(
           'Profil Kelas',
           style: RupahTheme.heading(
-            size: 18,
+            size: 14,
             color: RupahColors.green,
           ),
         ),
@@ -55,7 +55,7 @@ class ProfilUserScreen extends StatelessWidget {
                       children: [
                         Text(
                           'Kelas XI RPL 1',
-                          style: RupahTheme.heading(size: 17),
+                          style: RupahTheme.heading(size: 14),
                         ),
                         const SizedBox(height: 3),
                         const StatusPill(
@@ -68,14 +68,14 @@ class ProfilUserScreen extends StatelessWidget {
                         Text(
                           'Wali Kelas: Bpk. Haryono, S.Kom',
                           style: RupahTheme.body(
-                            size: 10,
+                            size: 12,
                             color: RupahColors.muted,
                           ),
                         ),
                         Text(
                           'Ketua Adiwiyata: Ahmad Arfani',
                           style: RupahTheme.body(
-                            size: 10,
+                            size: 12,
                             color: RupahColors.muted,
                           ),
                         ),
@@ -144,7 +144,7 @@ class ProfilUserScreen extends StatelessWidget {
                       Expanded(
                         child: Text(
                           'Informasi Sekolah',
-                          style: RupahTheme.heading(size: 15),
+                          style: RupahTheme.heading(size: 14),
                         ),
                       ),
                       const StatusPill(
@@ -216,7 +216,7 @@ class ProfilUserScreen extends StatelessWidget {
           Text(
             label,
             style: RupahTheme.body(
-              size: 9.5,
+              size: 12,
               color: RupahColors.muted,
             ),
           ),

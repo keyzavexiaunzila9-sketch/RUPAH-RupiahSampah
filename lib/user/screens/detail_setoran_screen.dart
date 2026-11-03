@@ -86,14 +86,14 @@ class DetailSetoranScreen extends StatelessWidget {
                         'BUKTI TRANSAKSI',
                         style: TextStyle(
                           color: green,
-                          fontSize: 10,
+                          fontSize: 12,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
                       Text(
                         'Detail Setoran',
                         style: RupahTheme.heading(
-                          size: 17,
+                          size: 14,
                           color: ink,
                         ),
                       ),
@@ -141,7 +141,7 @@ class DetailSetoranScreen extends StatelessWidget {
                                         : 'Menunggu Verifikasi',
                                 style: TextStyle(
                                   color: warna,
-                                  fontSize: 13,
+                                  fontSize: 14,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
@@ -154,7 +154,7 @@ class DetailSetoranScreen extends StatelessWidget {
                                         : 'Setoran sedang diperiksa admin',
                                 style: const TextStyle(
                                   color: ink,
-                                  fontSize: 11,
+                                  fontSize: 12,
                                 ),
                               ),
                             ],
@@ -196,14 +196,14 @@ class DetailSetoranScreen extends StatelessWidget {
                               : 'Estimasi Reward',
                           style: const TextStyle(
                             color: Colors.white70,
-                            fontSize: 11,
+                            fontSize: 12,
                           ),
                         ),
                         const SizedBox(height: 3),
                         Text(
                           'Rp ${_rupiah(ditolak ? 0 : total)}',
                           style: RupahTheme.heading(
-                            size: 27,
+                            size: 14,
                             color: Colors.white,
                           ),
                         ),
@@ -221,7 +221,7 @@ class DetailSetoranScreen extends StatelessWidget {
                           '♟ Kas Kelas XI RPL 1',
                           style: TextStyle(
                             color: Colors.white,
-                            fontSize: 11,
+                            fontSize: 12,
                           ),
                         ),
                       ],
@@ -238,7 +238,7 @@ class DetailSetoranScreen extends StatelessWidget {
                         Text(
                           'Informasi Penimbangan',
                           style: RupahTheme.heading(
-                            size: 16,
+                            size: 14,
                             color: ink,
                           ),
                         ),
@@ -263,7 +263,7 @@ class DetailSetoranScreen extends StatelessWidget {
                             'CATATAN PENYETOR',
                             style: TextStyle(
                               color: muted,
-                              fontSize: 10,
+                              fontSize: 12,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
@@ -300,7 +300,7 @@ class DetailSetoranScreen extends StatelessWidget {
                               child: Text(
                                 'Bukti Fisik Timbangan',
                                 style: RupahTheme.heading(
-                                  size: 15,
+                                  size: 14,
                                   color: ink,
                                 ),
                               ),
@@ -348,7 +348,7 @@ class DetailSetoranScreen extends StatelessWidget {
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: green,
-                        fontSize: 10,
+                        fontSize: 12,
                         height: 1.7,
                       ),
                     ),
@@ -410,7 +410,7 @@ class DetailSetoranScreen extends StatelessWidget {
               textAlign: TextAlign.right,
               style: TextStyle(
                 color: valueColor,
-                fontSize: 13,
+                fontSize: 12,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -434,7 +434,7 @@ class DetailSetoranScreen extends StatelessWidget {
         text,
         style: TextStyle(
           color: fg,
-          fontSize: 10,
+          fontSize: 12,
           fontWeight: FontWeight.bold,
         ),
       ),
