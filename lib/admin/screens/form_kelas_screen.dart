@@ -1,4 +1,6 @@
+
 import 'package:flutter/material.dart';
+import '../../core/services/kelas_service.dart';
 
 class FormKelasScreen extends StatefulWidget {
   const FormKelasScreen({super.key});
@@ -9,13 +11,16 @@ class FormKelasScreen extends StatefulWidget {
 
 class _FormKelasScreenState extends State<FormKelasScreen> {
   final formKey = GlobalKey<FormState>();
+  final KelasService service = KelasService();
 
   final namaKelasController = TextEditingController();
-  final waliKelasController = TextEditingController();
+  final jurusanController = TextEditingController();
+  final namaWaliKelasController = TextEditingController();
   final usernameController = TextEditingController();
   final passwordController = TextEditingController();
 
-  bool obscurePassword = true;
+  bool loading = false;
+  bool sembunyikanPassword = true;
 
   static const Color green = Color(0xFF087A4F);
   static const Color background = Color(0xFFF5F7FC);
@@ -26,23 +31,53 @@ class _FormKelasScreenState extends State<FormKelasScreen> {
   @override
   void dispose() {
     namaKelasController.dispose();
-    waliKelasController.dispose();
+    jurusanController.dispose();
+    namaWaliKelasController.dispose();
     usernameController.dispose();
     passwordController.dispose();
     super.dispose();
   }
 
-  void simpanKelas() {
+  Future<void> simpanKelas() async {
     if (!formKey.currentState!.validate()) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Akun kelas berhasil dibuat.'),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+    setState(() => loading = true);
 
-    Navigator.pop(context);
+    try {
+      await service.buatKelasDenganAkun(
+        namaKelas: namaKelasController.text.trim(),
+        jurusan: jurusanController.text.trim(),
+        namaWaliKelas: namaWaliKelasController.text.trim(),
+        username: usernameController.text.trim(),
+        password: passwordController.text,
+      );
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Data kelas dan akun berhasil dibuat.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Gagal membuat kelas: ${e.toString().replaceFirst('Exception: ', '')}',
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => loading = false);
+      }
+    }
   }
 
   @override
@@ -64,7 +99,7 @@ class _FormKelasScreenState extends State<FormKelasScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Data & Akun Kelas',
+              'Data Kelas',
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.bold,
@@ -85,7 +120,6 @@ class _FormKelasScreenState extends State<FormKelasScreen> {
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 20),
         child: Container(
           width: double.infinity,
-          constraints: const BoxConstraints(minHeight: 420),
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             color: Colors.white,
@@ -114,7 +148,7 @@ class _FormKelasScreenState extends State<FormKelasScreen> {
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(
-                        Icons.person_add_alt_1_rounded,
+                        Icons.school_outlined,
                         color: green,
                         size: 18,
                       ),
@@ -125,7 +159,7 @@ class _FormKelasScreenState extends State<FormKelasScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Daftarkan Akun Kelas Baru',
+                            'Tambah Data Kelas',
                             style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.bold,
@@ -134,7 +168,7 @@ class _FormKelasScreenState extends State<FormKelasScreen> {
                           ),
                           SizedBox(height: 2),
                           Text(
-                            'Terbitkan akun siswa',
+                            'Masukkan informasi kelas dan akun login',
                             style: TextStyle(
                               fontSize: 12,
                               color: muted,
@@ -148,29 +182,34 @@ class _FormKelasScreenState extends State<FormKelasScreen> {
 
                 const SizedBox(height: 17),
 
-                _label('Nama Kelas & Jurusan'),
+                _label('Nama Kelas'),
                 _input(
                   controller: namaKelasController,
-                  hint: 'Contoh: XII RPL',
-                  validatorMessage: 'Nama kelas wajib diisi.',
+                  hint: 'Contoh: XII RPL D',
                 ),
 
                 const SizedBox(height: 12),
 
-                _label('Wali Kelas'),
+                _label('Jurusan'),
                 _input(
-                  controller: waliKelasController,
-                  hint: 'Masukkan nama wali kelas',
-                  validatorMessage: 'Nama wali kelas wajib diisi.',
+                  controller: jurusanController,
+                  hint: 'Contoh: Rekayasa Perangkat Lunak',
                 ),
 
                 const SizedBox(height: 12),
 
-                _label('Username Sistem'),
+                _label('Nama Wali Kelas'),
+                _input(
+                  controller: namaWaliKelasController,
+                  hint: 'Masukkan nama wali kelas',
+                ),
+
+                const SizedBox(height: 12),
+
+                _label('Username'),
                 _input(
                   controller: usernameController,
-                  hint: '@',
-                  validatorMessage: 'Username wajib diisi.',
+                  hint: 'Contoh: xiirpld',
                 ),
 
                 const SizedBox(height: 12),
@@ -178,33 +217,35 @@ class _FormKelasScreenState extends State<FormKelasScreen> {
                 _label('Password'),
                 TextFormField(
                   controller: passwordController,
-                  obscureText: obscurePassword,
+                  obscureText: sembunyikanPassword,
                   style: const TextStyle(
                     fontSize: 12,
                     color: ink,
                   ),
                   validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
+                    if (value == null || value.isEmpty) {
                       return 'Password wajib diisi.';
                     }
-                    if (value.length < 6) {
-                      return 'Password minimal 6 karakter.';
+
+                    if (value.length < 8) {
+                      return 'Password minimal 8 karakter.';
                     }
+
                     return null;
                   },
                   decoration: _decoration(
-                    hint: 'Masukkan password',
+                    hint: 'Masukkan password minimal 8 karakter',
                   ).copyWith(
                     suffixIcon: IconButton(
                       onPressed: () {
                         setState(() {
-                          obscurePassword = !obscurePassword;
+                          sembunyikanPassword = !sembunyikanPassword;
                         });
                       },
                       icon: Icon(
-                        obscurePassword
-                            ? Icons.visibility_outlined
-                            : Icons.visibility_off_outlined,
+                        sembunyikanPassword
+                            ? Icons.visibility_off_outlined
+                            : Icons.visibility_outlined,
                         size: 18,
                         color: muted,
                       ),
@@ -212,20 +253,29 @@ class _FormKelasScreenState extends State<FormKelasScreen> {
                   ),
                 ),
 
-                const SizedBox(height: 12),
+                const SizedBox(height: 18),
 
                 SizedBox(
                   width: double.infinity,
                   height: 43,
                   child: ElevatedButton.icon(
-                    onPressed: simpanKelas,
-                    icon: const Icon(
-                      Icons.verified_rounded,
-                      size: 16,
-                    ),
-                    label: const Text(
-                      'Simpan & Terbitkan Kredensial',
-                      style: TextStyle(
+                    onPressed: loading ? null : simpanKelas,
+                    icon: loading
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(
+                            Icons.verified_rounded,
+                            size: 16,
+                          ),
+                    label: Text(
+                      loading ? 'Menyimpan...' : 'Simpan Data Kelas',
+                      style: const TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.bold,
                       ),
@@ -265,7 +315,6 @@ class _FormKelasScreenState extends State<FormKelasScreen> {
   Widget _input({
     required TextEditingController controller,
     required String hint,
-    required String validatorMessage,
   }) {
     return TextFormField(
       controller: controller,
@@ -275,7 +324,7 @@ class _FormKelasScreenState extends State<FormKelasScreen> {
       ),
       validator: (value) {
         if (value == null || value.trim().isEmpty) {
-          return validatorMessage;
+          return 'Kolom ini wajib diisi.';
         }
         return null;
       },

@@ -1,67 +1,133 @@
 
 import 'package:flutter/material.dart';
 import '../widgets/admin_widgets.dart';
+import '../../core/services/sampah_service.dart';
 import 'edit_sampah_screen.dart';
 import 'form_sampah_screen.dart';
 
-class _Sampah {
-  final String nama, tag, deskripsi, stok, tarif;
-  final Color warna, soft;
-  final IconData icon;
+class DataSampahScreen extends StatefulWidget {
+  const DataSampahScreen({super.key});
 
-  const _Sampah(
-    this.nama,
-    this.tag,
-    this.deskripsi,
-    this.stok,
-    this.tarif,
-    this.warna,
-    this.soft,
-    this.icon,
-  );
+  @override
+  State<DataSampahScreen> createState() => _DataSampahScreenState();
 }
 
-const _data = [
-  _Sampah(
-    'Sampah Organik',
-    'Daur Ulang Alami',
-    'Sisa Kantin, Dedaunan & Kompos Sekolah',
-    '120.0',
-    '3.000',
-    AdminColors.primary,
-    AdminColors.primaryLight,
-    Icons.eco,
-  ),
-  _Sampah(
-    'Sampah Anorganik',
-    'Daur Ulang Pengepul',
-    'Plastik PET, Kertas, Kardus & Logam',
-    '285.0',
-    '2.000',
-    AdminColors.teal,
-    AdminColors.tealLight,
-    Icons.recycling,
-  ),
-  _Sampah(
-    'Sampah B3 & Berbahaya',
-    'Penanganan Khusus',
-    'Baterai Bekas, Lampu TL, Limbah Kimia Lab',
-    '23.5',
-    '5000',
-    AdminColors.danger,
-    AdminColors.dangerBg,
-    Icons.warning_amber_rounded,
-  ),
-];
+class _DataSampahScreenState extends State<DataSampahScreen> {
+  final service = SampahService();
+  final searchController = TextEditingController();
 
-class DataSampahScreen extends StatelessWidget {
-  const DataSampahScreen({super.key});
+  late Future<List<Map<String, dynamic>>> futureSampah;
+  String kataKunci = '';
+
+  @override
+  void initState() {
+    super.initState();
+    futureSampah = service.getAllSampah();
+  }
+
+  @override
+  void dispose() {
+    searchController.dispose();
+    super.dispose();
+  }
+
+  void refreshData() {
+    setState(() {
+      futureSampah = service.getAllSampah();
+    });
+  }
+
+  String formatRupiah(dynamic harga) {
+    final nilai = (harga as num?)?.toInt() ?? 0;
+    final angka = nilai.toString();
+
+    return angka.replaceAllMapped(
+      RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
+      (match) => '${match[1]}.',
+    );
+  }
+
+  Future<void> tambahData() async {
+    final hasil = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const FormSampahScreen(),
+      ),
+    );
+
+    if (hasil == true) refreshData();
+  }
+
+  Future<void> editData(Map<String, dynamic> data) async {
+    final hasil = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => EditSampahScreen(data: data),
+      ),
+    );
+
+    if (hasil == true) refreshData();
+  }
+
+  Future<void> hapusData(Map<String, dynamic> data) async {
+    final konfirmasi = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Hapus Data Sampah'),
+        content: Text(
+          'Yakin ingin menghapus ${data['nama_sampah']}?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Batal'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AdminColors.danger,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Hapus'),
+          ),
+        ],
+      ),
+    );
+
+    if (konfirmasi != true) return;
+
+    try {
+      await service.hapusSampah(data['id_sampah']);
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Data berhasil dihapus.'),
+        ),
+      );
+
+      refreshData();
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Data tidak bisa dihapus karena mungkin sudah digunakan '
+            'dalam setoran. Ubah status menjadi nonaktif.',
+          ),
+          duration: Duration(seconds: 4),
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        // HEADER DENGAN LOGO RUPAH
+        // HEADER
         Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(
@@ -71,9 +137,7 @@ class DataSampahScreen extends StatelessWidget {
           decoration: const BoxDecoration(
             color: Colors.white,
             border: Border(
-              bottom: BorderSide(
-                color: AdminColors.border,
-              ),
+              bottom: BorderSide(color: AdminColors.border),
             ),
           ),
           child: Row(
@@ -83,17 +147,13 @@ class DataSampahScreen extends StatelessWidget {
                 width: 42,
                 height: 42,
                 fit: BoxFit.contain,
-                errorBuilder: (context, error, stackTrace) {
-                  return const Icon(
-                    Icons.recycling_rounded,
-                    size: 38,
-                    color: AdminColors.primary,
-                  );
-                },
+                errorBuilder: (_, __, ___) => const Icon(
+                  Icons.recycling_rounded,
+                  size: 38,
+                  color: AdminColors.primary,
+                ),
               ),
-
               const SizedBox(width: 12),
-
               const Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -108,7 +168,7 @@ class DataSampahScreen extends StatelessWidget {
                     ),
                     SizedBox(height: 4),
                     Text(
-                      'Kelola Master Data & Tarif • 3 Kategori',
+                      'Kelola Jenis Sampah & Tarif',
                       style: TextStyle(
                         fontSize: 11,
                         color: Colors.grey,
@@ -117,19 +177,11 @@ class DataSampahScreen extends StatelessWidget {
                   ],
                 ),
               ),
-
               SizedBox(
                 width: 84,
                 height: 44,
                 child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const FormSampahScreen(),
-                      ),
-                    );
-                  },
+                  onPressed: tambahData,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AdminColors.primary,
                     foregroundColor: Colors.white,
@@ -141,10 +193,7 @@ class DataSampahScreen extends StatelessWidget {
                   child: const Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(
-                        Icons.add_circle_outline,
-                        size: 18,
-                      ),
+                      Icon(Icons.add_circle_outline, size: 18),
                       SizedBox(width: 4),
                       Text(
                         'Baru',
@@ -161,30 +210,206 @@ class DataSampahScreen extends StatelessWidget {
           ),
         ),
 
-        // DAFTAR DATA SAMPAH
+        // DAFTAR DATA
         Expanded(
-          child: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              const AdminSearch(),
-              for (final s in _data) _SampahCard(s),
-            ],
+          child: FutureBuilder<List<Map<String, dynamic>>>(
+            future: futureSampah,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState ==
+                  ConnectionState.waiting) {
+                return const Center(
+                  child: CircularProgressIndicator(),
+                );
+              }
+
+              if (snapshot.hasError) {
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.error_outline,
+                          color: Colors.red,
+                          size: 40,
+                        ),
+                        const SizedBox(height: 10),
+                        const Text(
+                          'Gagal mengambil data sampah.',
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          '${snapshot.error}',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(fontSize: 11),
+                        ),
+                        TextButton(
+                          onPressed: refreshData,
+                          child: const Text('Coba Lagi'),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }
+
+              final semuaData = snapshot.data ?? [];
+
+              // FILTER PENCARIAN
+              final data = semuaData.where((item) {
+                final nama = (item['nama_sampah'] ?? '')
+                    .toString()
+                    .toLowerCase();
+
+                final kategori = (item['kategori'] ?? '')
+                    .toString()
+                    .toLowerCase();
+
+                return nama.contains(kataKunci.toLowerCase()) ||
+                    kategori.contains(kataKunci.toLowerCase());
+              }).toList();
+
+              if (semuaData.isEmpty) {
+                return _pesanKosong(
+                  'Belum ada data sampah.',
+                  'Tambahkan jenis sampah pertama.',
+                );
+              }
+
+              return ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  TextField(
+                    controller: searchController,
+                    onChanged: (value) {
+                      setState(() => kataKunci = value);
+                    },
+                    decoration: InputDecoration(
+                      hintText: 'Cari nama atau kategori sampah...',
+                      prefixIcon: const Icon(Icons.search),
+                      suffixIcon: kataKunci.isEmpty
+                          ? null
+                          : IconButton(
+                              onPressed: () {
+                                searchController.clear();
+                                setState(() => kataKunci = '');
+                              },
+                              icon: const Icon(Icons.close),
+                            ),
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 14),
+
+                  if (data.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.all(25),
+                      child: Center(
+                        child: Text(
+                          'Data sampah tidak ditemukan.',
+                        ),
+                      ),
+                    ),
+
+                  for (final item in data)
+                    _SampahCard(
+                      data: item,
+                      harga: formatRupiah(
+                        item['harga_per_kg'],
+                      ),
+                      onEdit: () => editData(item),
+                      onDelete: () => hapusData(item),
+                    ),
+                ],
+              );
+            },
           ),
         ),
       ],
     );
   }
+
+  Widget _pesanKosong(String judul, String deskripsi) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            Icons.recycling_outlined,
+            size: 55,
+            color: AdminColors.muted,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            judul,
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 5),
+          Text(
+            deskripsi,
+            style: const TextStyle(
+              color: AdminColors.muted,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
-class _SampahCard extends StatelessWidget {
-  final _Sampah s;
+// ==========================================
+// CARD DATA SAMPAH
+// ==========================================
 
-  const _SampahCard(this.s);
+class _SampahCard extends StatelessWidget {
+  final Map<String, dynamic> data;
+  final String harga;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+
+  const _SampahCard({
+    required this.data,
+    required this.harga,
+    required this.onEdit,
+    required this.onDelete,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final kategori = (data['kategori'] ?? '').toString();
+
+    // STATUS BOOLEAN DARI SUPABASE
+    final bool status = data['status'] == true;
+
+    final warna = kategori == 'Organik'
+        ? AdminColors.primary
+        : kategori == 'B3'
+            ? AdminColors.danger
+            : AdminColors.teal;
+
+    final soft = kategori == 'Organik'
+        ? AdminColors.primaryLight
+        : kategori == 'B3'
+            ? AdminColors.dangerBg
+            : AdminColors.tealLight;
+
+    final icon = kategori == 'Organik'
+        ? Icons.eco
+        : kategori == 'B3'
+            ? Icons.warning_amber_rounded
+            : Icons.recycling;
+
     return AdminCard(
-      accent: s.warna,
+      accent: warna,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -194,37 +419,41 @@ class _SampahCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: s.soft,
+                  color: soft,
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(
-                  s.icon,
-                  color: s.warna,
-                ),
+                child: Icon(icon, color: warna),
               ),
+
               const SizedBox(width: 12),
+
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      s.nama,
+                      data['nama_sampah'] ?? '-',
                       style: const TextStyle(
-                        fontSize: 17,
+                        fontSize: 16,
                         fontWeight: FontWeight.w700,
-                        height: 1.2,
                       ),
                     ),
+
                     const SizedBox(height: 6),
+
                     AdminPill(
-                      s.tag,
-                      bg: s.soft,
-                      fg: s.warna,
+                      kategori.isEmpty
+                          ? 'Tanpa Kategori'
+                          : kategori,
+                      bg: soft,
+                      fg: warna,
                       size: 10,
                     ),
+
                     const SizedBox(height: 6),
+
                     Text(
-                      s.deskripsi,
+                      data['deskripsi'] ?? 'Tidak ada deskripsi.',
                       style: const TextStyle(fontSize: 11),
                     ),
                   ],
@@ -233,136 +462,77 @@ class _SampahCard extends StatelessWidget {
             ],
           ),
 
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
 
+          // HARGA SAMPAH
           Container(
-            padding: const EdgeInsets.symmetric(vertical: 10),
+            padding: const EdgeInsets.symmetric(vertical: 12),
             decoration: BoxDecoration(
               color: AdminColors.blueSoft,
               borderRadius: BorderRadius.circular(12),
             ),
             child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Expanded(
-                  child: Column(
-                    children: [
-                      const Text(
-                        'Stok Gudang',
-                        style: TextStyle(fontSize: 10),
-                      ),
-                      Text.rich(
-                        TextSpan(
-                          text: s.stok,
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                            color: s.warna,
-                          ),
-                          children: const [
-                            TextSpan(
-                              text: ' Kg',
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
+                const Icon(
+                  Icons.payments_outlined,
+                  color: AdminColors.primary,
+                  size: 20,
                 ),
-
-                Container(
-                  width: 1,
-                  height: 36,
-                  color: AdminColors.border,
-                ),
-
-                Expanded(
-                  child: Column(
-                    children: [
-                      const Text(
-                        'Beli Siswa',
-                        style: TextStyle(fontSize: 10),
+                const SizedBox(width: 8),
+                Column(
+                  children: [
+                    const Text(
+                      'Harga Beli dari Siswa',
+                      style: TextStyle(fontSize: 10),
+                    ),
+                    Text(
+                      'Rp $harga / Kg',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
                       ),
-                      Text.rich(
-                        TextSpan(
-                          text: 'Rp ${s.tarif}',
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                          ),
-                          children: const [
-                            TextSpan(
-                              text: '/Kg',
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w400,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ],
             ),
           ),
 
-          const Divider(height: 24),
+          const SizedBox(height: 10),
 
+          // STATUS DAN AKSI
           Row(
             children: [
-              GestureDetector(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const EditSampahScreen(),
-                    ),
-                  );
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: s.soft,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.edit_outlined,
-                        size: 14,
-                        color: s.warna,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Edit Tarif, Stok & Keterangan',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: s.warna,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+              AdminPill(
+                status ? 'AKTIF' : 'NONAKTIF',
+                bg: status
+                    ? AdminColors.primaryLight
+                    : const Color(0xFFEDEFF3),
+                fg: status
+                    ? AdminColors.primary
+                    : AdminColors.muted,
+                size: 9,
               ),
 
               const Spacer(),
 
               IconButton(
-                onPressed: () {},
+                onPressed: onEdit,
+                icon: const Icon(
+                  Icons.edit_outlined,
+                  color: AdminColors.primary,
+                ),
+                tooltip: 'Edit',
+              ),
+
+              IconButton(
+                onPressed: onDelete,
                 icon: const Icon(
                   Icons.delete_outline,
                   color: AdminColors.danger,
                 ),
+                tooltip: 'Hapus',
               ),
             ],
           ),

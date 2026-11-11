@@ -1,6 +1,11 @@
+
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../../core/services/verifikasi_service.dart';
 
 class TolakSetoranScreen extends StatefulWidget {
+  final int idSetoran;
   final String nama;
   final String kelas;
   final String jenisSampah;
@@ -9,11 +14,12 @@ class TolakSetoranScreen extends StatefulWidget {
 
   const TolakSetoranScreen({
     super.key,
-    this.nama = 'Dimas Pratama',
-    this.kelas = 'XI RPL 1',
-    this.jenisSampah = 'Botol PET Bening',
-    this.berat = '5,0 Kg',
-    this.nilaiKas = 'Rp 15.000',
+    required this.idSetoran,
+    required this.nama,
+    required this.kelas,
+    required this.jenisSampah,
+    required this.berat,
+    required this.nilaiKas,
   });
 
   @override
@@ -23,12 +29,13 @@ class TolakSetoranScreen extends StatefulWidget {
 
 class _TolakSetoranScreenState extends State<TolakSetoranScreen> {
   static const red = Color(0xFFBE171B);
-  static const darkRed = Color(0xFFA91419);
   static const green = Color(0xFF087A50);
   static const background = Color(0xFFF5F7FC);
   static const ink = Color(0xFF26352F);
   static const muted = Color(0xFF84908B);
   static const border = Color(0xFFE9EDF2);
+
+  final VerifikasiService _service = VerifikasiService();
 
   final TextEditingController uraianController =
       TextEditingController();
@@ -36,6 +43,7 @@ class _TolakSetoranScreenState extends State<TolakSetoranScreen> {
   int? selectedReason;
   bool selectedAction1 = true;
   bool selectedAction2 = false;
+  bool sedangMengirim = false;
 
   final List<Map<String, dynamic>> reasons = [
     {
@@ -66,7 +74,7 @@ class _TolakSetoranScreenState extends State<TolakSetoranScreen> {
       'icon': Icons.warning_amber_rounded,
       'title': 'Indikasi Manipulasi / Kecurangan',
       'description':
-          'Ditemukan indikasi data yang tidak sesuai atau manipulasi selama proses penyetoran.',
+          'Ditemukan indikasi data yang tidak sesuai selama proses penyetoran.',
     },
     {
       'icon': Icons.school_outlined,
@@ -82,26 +90,39 @@ class _TolakSetoranScreenState extends State<TolakSetoranScreen> {
     super.dispose();
   }
 
-  void kirimPenolakan() {
+  // ==========================================
+  // MENYIMPAN PENOLAKAN
+  // ==========================================
+  Future<void> kirimPenolakan() async {
     if (selectedReason == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Pilih alasan penolakan terlebih dahulu.'),
-        ),
+      tampilkanPesan(
+        'Pilih alasan penolakan terlebih dahulu.',
       );
       return;
     }
 
-    if (uraianController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Uraian alasan wajib diisi.'),
-        ),
-      );
+    final uraian = uraianController.text.trim();
+
+    if (uraian.isEmpty) {
+      tampilkanPesan('Uraian alasan wajib diisi.');
       return;
     }
 
-    showDialog(
+    final tindakLanjut = <String>[];
+
+    if (selectedAction1) {
+      tindakLanjut.add(
+        'Lakukan pemilahan ulang setelah diperbaiki',
+      );
+    }
+
+    if (selectedAction2) {
+      tindakLanjut.add(
+        'Beri catatan teguran edukatif ke wali kelas',
+      );
+    }
+
+    final konfirmasi = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
@@ -121,41 +142,74 @@ class _TolakSetoranScreenState extends State<TolakSetoranScreen> {
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text(
-                'Batal',
-                style: TextStyle(fontSize: 12),
-              ),
+              onPressed: () {
+                Navigator.pop(dialogContext, false);
+              },
+              child: const Text('Batal'),
             ),
             ElevatedButton(
               onPressed: () {
-                Navigator.pop(dialogContext);
-                Navigator.pop(context);
-
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text(
-                      'Penolakan setoran berhasil diproses.',
-                    ),
-                    behavior: SnackBarBehavior.floating,
-                  ),
-                );
+                Navigator.pop(dialogContext, true);
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: red,
                 foregroundColor: Colors.white,
               ),
-              child: const Text(
-                'Ya, Tolak',
-                style: TextStyle(fontSize: 12),
-              ),
+              child: const Text('Ya, Tolak'),
             ),
           ],
         );
       },
     );
+
+    if (konfirmasi != true || !mounted) return;
+
+    setState(() {
+      sedangMengirim = true;
+    });
+
+    try {
+      await _service.tolakSetoran(
+        idSetoran: widget.idSetoran,
+        kategoriPenolakan:
+            reasons[selectedReason!]['title'] as String,
+        catatan: uraian,
+        tindakLanjut: tindakLanjut,
+      );
+
+      if (!mounted) return;
+
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+
+      tampilkanPesan(
+        'Gagal menyimpan penolakan: ${e.toString()}',
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          sedangMengirim = false;
+        });
+      }
+    }
   }
 
+  // ==========================================
+  // SNACKBAR
+  // ==========================================
+  void tampilkanPesan(String pesan) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(pesan),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  // ==========================================
+  // TAMPILAN UTAMA
+  // ==========================================
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -165,7 +219,9 @@ class _TolakSetoranScreenState extends State<TolakSetoranScreen> {
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          onPressed: () => Navigator.pop(context),
+          onPressed: sedangMengirim
+              ? null
+              : () => Navigator.pop(context),
           icon: const Icon(
             Icons.arrow_back_rounded,
             size: 20,
@@ -210,11 +266,8 @@ class _TolakSetoranScreenState extends State<TolakSetoranScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _identityCard(),
-
             const SizedBox(height: 12),
-
             _warningCard(),
-
             const SizedBox(height: 12),
 
             Row(
@@ -272,31 +325,37 @@ class _TolakSetoranScreenState extends State<TolakSetoranScreen> {
             ),
 
             const SizedBox(height: 7),
-
             _uraianCard(),
-
             const SizedBox(height: 12),
-
             _followUpCard(),
-
             const SizedBox(height: 12),
-
             _adminCard(),
-
             const SizedBox(height: 15),
 
             SizedBox(
               width: double.infinity,
               height: 43,
               child: ElevatedButton.icon(
-                onPressed: kirimPenolakan,
-                icon: const Icon(
-                  Icons.cancel_outlined,
-                  size: 15,
-                ),
-                label: const Text(
-                  'Tolak & Kirim Notifikasi',
-                  style: TextStyle(
+                onPressed:
+                    sedangMengirim ? null : kirimPenolakan,
+                icon: sedangMengirim
+                    ? const SizedBox(
+                        width: 15,
+                        height: 15,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(
+                        Icons.cancel_outlined,
+                        size: 15,
+                      ),
+                label: Text(
+                  sedangMengirim
+                      ? 'Menyimpan Penolakan...'
+                      : 'Tolak & Kirim Notifikasi',
+                  style: const TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
                   ),
@@ -316,7 +375,9 @@ class _TolakSetoranScreenState extends State<TolakSetoranScreen> {
 
             Center(
               child: TextButton(
-                onPressed: () => Navigator.pop(context),
+                onPressed: sedangMengirim
+                    ? null
+                    : () => Navigator.pop(context),
                 child: const Text(
                   'Batal / Kembali ke Verifikasi',
                   style: TextStyle(
@@ -332,7 +393,9 @@ class _TolakSetoranScreenState extends State<TolakSetoranScreen> {
     );
   }
 
-  // IDENTITAS PENYETOR
+  // ==========================================
+  // KARTU IDENTITAS SETORAN
+  // ==========================================
   Widget _identityCard() {
     return Container(
       padding: const EdgeInsets.all(12),
@@ -379,9 +442,7 @@ class _TolakSetoranScreenState extends State<TolakSetoranScreen> {
               ),
             ],
           ),
-
           const SizedBox(height: 8),
-
           Text(
             widget.nama,
             style: const TextStyle(
@@ -390,9 +451,7 @@ class _TolakSetoranScreenState extends State<TolakSetoranScreen> {
               color: ink,
             ),
           ),
-
           const SizedBox(height: 3),
-
           Row(
             children: [
               const Icon(
@@ -423,9 +482,7 @@ class _TolakSetoranScreenState extends State<TolakSetoranScreen> {
               ),
             ],
           ),
-
           const SizedBox(height: 12),
-
           Row(
             children: [
               Expanded(
@@ -501,7 +558,9 @@ class _TolakSetoranScreenState extends State<TolakSetoranScreen> {
     );
   }
 
-  // PERINGATAN
+  // ==========================================
+  // KARTU PERINGATAN
+  // ==========================================
   Widget _warningCard() {
     return Container(
       padding: const EdgeInsets.all(12),
@@ -553,7 +612,9 @@ class _TolakSetoranScreenState extends State<TolakSetoranScreen> {
     );
   }
 
-  // PILIHAN ALASAN
+  // ==========================================
+  // KATEGORI PENOLAKAN
+  // ==========================================
   Widget _reasonCard(int index) {
     final item = reasons[index];
     final selected = selectedReason == index;
@@ -584,7 +645,9 @@ class _TolakSetoranScreenState extends State<TolakSetoranScreen> {
               selected
                   ? Icons.radio_button_checked
                   : Icons.radio_button_off,
-              color: selected ? red : const Color(0xFFB8C7C0),
+              color: selected
+                  ? red
+                  : const Color(0xFFB8C7C0),
               size: 19,
             ),
             const SizedBox(width: 8),
@@ -630,7 +693,9 @@ class _TolakSetoranScreenState extends State<TolakSetoranScreen> {
     );
   }
 
-  // URAIAN ALASAN
+  // ==========================================
+  // URAIAN PENOLAKAN
+  // ==========================================
   Widget _uraianCard() {
     return Container(
       padding: const EdgeInsets.all(11),
@@ -692,7 +757,9 @@ class _TolakSetoranScreenState extends State<TolakSetoranScreen> {
     );
   }
 
-  // OPSI TINDAK LANJUT
+  // ==========================================
+  // TINDAK LANJUT
+  // ==========================================
   Widget _followUpCard() {
     return Container(
       padding: const EdgeInsets.all(12),
@@ -722,26 +789,26 @@ class _TolakSetoranScreenState extends State<TolakSetoranScreen> {
               ),
             ],
           ),
-
           const SizedBox(height: 10),
-
           _actionOption(
             value: selectedAction1,
             onChanged: (value) {
-              setState(() => selectedAction1 = value ?? false);
+              setState(() {
+                selectedAction1 = value ?? false;
+              });
             },
             title: 'Lakukan pemilahan ulang setelah diperbaiki',
             description:
                 'Siswa dapat memperbaiki kondisi sampah dan '
                 'mengirimkan ulang setoran.',
           ),
-
           const Divider(height: 12),
-
           _actionOption(
             value: selectedAction2,
             onChanged: (value) {
-              setState(() => selectedAction2 = value ?? false);
+              setState(() {
+                selectedAction2 = value ?? false;
+              });
             },
             title: 'Beri catatan teguran edukatif ke wali kelas',
             description:
@@ -766,7 +833,8 @@ class _TolakSetoranScreenState extends State<TolakSetoranScreen> {
           value: value,
           onChanged: onChanged,
           activeColor: green,
-          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          materialTapTargetSize:
+              MaterialTapTargetSize.shrinkWrap,
           visualDensity: VisualDensity.compact,
         ),
         const SizedBox(width: 5),
@@ -801,63 +869,85 @@ class _TolakSetoranScreenState extends State<TolakSetoranScreen> {
     );
   }
 
-  // INFORMASI ADMIN
+  // ==========================================
+  // INFORMASI ADMIN YANG LOGIN
+  // ==========================================
   Widget _adminCard() {
-    return Container(
-      padding: const EdgeInsets.all(11),
-      decoration: BoxDecoration(
-        color: const Color(0xFFEAF5F1),
-        borderRadius: BorderRadius.circular(13),
-        border: Border.all(
-          color: const Color(0xFFD2E9DF),
-        ),
-      ),
-      child: const Row(
-        children: [
-          CircleAvatar(
-            radius: 15,
-            backgroundColor: Color(0xFFD2E9DF),
-            child: Text(
-              'AD',
-              style: TextStyle(
-                fontSize: 12,
-                color: green,
-                fontWeight: FontWeight.bold,
-              ),
+    final adminId =
+        Supabase.instance.client.auth.currentUser?.id;
+
+    return FutureBuilder<Map<String, dynamic>?>(
+      future: adminId == null
+          ? Future.value(null)
+          : Supabase.instance.client
+              .from('users')
+              .select('username')
+              .eq('id_user', adminId)
+              .maybeSingle(),
+      builder: (context, snapshot) {
+        final username =
+            snapshot.data?['username']?.toString() ?? '-';
+
+        return Container(
+          padding: const EdgeInsets.all(11),
+          decoration: BoxDecoration(
+            color: const Color(0xFFEAF5F1),
+            borderRadius: BorderRadius.circular(13),
+            border: Border.all(
+              color: const Color(0xFFD2E9DF),
             ),
           ),
-          SizedBox(width: 9),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Bu Sugiyanti',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: ink,
-                  ),
-                ),
-                Text(
-                  'Admin • Penanggung Jawab',
+          child: Row(
+            children: [
+              const CircleAvatar(
+                radius: 15,
+                backgroundColor: Color(0xFFD2E9DF),
+                child: Text(
+                  'AD',
                   style: TextStyle(
                     fontSize: 12,
                     color: green,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Admin RUPAH',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: ink,
+                      ),
+                    ),
+                    Text(
+                      snapshot.connectionState ==
+                              ConnectionState.waiting
+                          ? 'Memuat admin...'
+                          : username,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: green,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Text(
+                'Admin Verifikasi',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: muted,
+                ),
+              ),
+            ],
           ),
-          Text(
-            'Admin Verifikasi',
-            style: TextStyle(
-              fontSize: 12,
-              color: muted,
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 }

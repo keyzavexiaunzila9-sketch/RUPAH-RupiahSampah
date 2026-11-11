@@ -1,6 +1,9 @@
 
 import 'package:flutter/material.dart';
 
+import '../../core/services/verifikasi_service.dart';
+import 'detail_verifikasi_screen.dart';
+
 class VerifikasiSetoranScreen extends StatefulWidget {
   const VerifikasiSetoranScreen({super.key});
 
@@ -18,39 +21,19 @@ class _VerifikasiSetoranScreenState
   static const Color muted = Color(0xFF78857F);
   static const Color border = Color(0xFFE8EDF2);
 
+  final VerifikasiService _service = VerifikasiService();
   final TextEditingController searchController =
       TextEditingController();
 
-  final List<Map<String, dynamic>> dataSetoran = [
-    {
-      'initials': 'DP',
-      'name': 'Dimas Pratama',
-      'class': 'XI RPL 1',
-      'time': '10 mnt lalu •\n14:35',
-      'category': 'Botol PET Bening\n(Grade A)',
-      'weight': '5.0 Kg',
-      'reward': 'Rp 15.000',
-      'status': 'Menunggu Verifikasi',
-    },
-    {
-      'initials': 'SA',
-      'name': 'Siti Aisyah',
-      'class': 'X TKJ',
-      'time': '25 mnt lalu •\n14:20',
-      'category': 'Kardus & Kertas Duple',
-      'weight': '12.4 Kg',
-      'reward': 'Rp 24.800',
-      'status': 'Menunggu Verifikasi',
-    },
-  ];
+  List<Map<String, dynamic>> dataSetoran = [];
 
-  List<Map<String, dynamic>> get filteredData {
-    final keyword = searchController.text.toLowerCase();
+  bool isLoading = true;
+  String? errorMessage;
 
-    return dataSetoran.where((data) {
-      return data['name'].toString().toLowerCase().contains(keyword) ||
-          data['class'].toString().toLowerCase().contains(keyword);
-    }).toList();
+  @override
+  void initState() {
+    super.initState();
+    loadData();
   }
 
   @override
@@ -59,7 +42,150 @@ class _VerifikasiSetoranScreenState
     super.dispose();
   }
 
-  void showMessage(String message) {
+  // MEMUAT DATA DARI SUPABASE
+  Future<void> loadData() async {
+    if (!mounted) return;
+
+    setState(() {
+      isLoading = true;
+      errorMessage = null;
+    });
+
+    try {
+      final result = await _service.getDataSetoran();
+
+      if (!mounted) return;
+
+      setState(() {
+        dataSetoran = result;
+        isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        errorMessage = e.toString();
+        isLoading = false;
+      });
+    }
+  }
+
+  // DATA YANG MENUNGGU VERIFIKASI
+  List<Map<String, dynamic>> get filteredData {
+    final keyword = searchController.text.trim().toLowerCase();
+
+    return dataSetoran.where((data) {
+      final status =
+          data['status']?.toString().toLowerCase() ?? '';
+
+      final namaKelas =
+          data['nama_kelas']?.toString().toLowerCase() ?? '';
+
+      final username =
+          data['username']?.toString().toLowerCase() ?? '';
+
+      final detail = List<Map<String, dynamic>>.from(
+        data['detail'] ?? [],
+      );
+
+      final namaSampah = detail
+          .map((item) =>
+              item['nama_sampah']?.toString() ?? '')
+          .join(' ')
+          .toLowerCase();
+
+      return status == 'menunggu' &&
+          (namaKelas.contains(keyword) ||
+              username.contains(keyword) ||
+              namaSampah.contains(keyword));
+    }).toList();
+  }
+
+  // STATISTIK MENUNGGU
+  int get jumlahMenunggu {
+    return dataSetoran.where((data) {
+      return data['status']?.toString().toLowerCase() ==
+          'menunggu';
+    }).length;
+  }
+
+  // STATISTIK DISETUJUI HARI INI
+  int get jumlahDisetujuiHariIni {
+    return dataSetoran.where((data) {
+      final status =
+          data['status']?.toString().toLowerCase() ?? '';
+
+      final tanggal =
+          DateTime.tryParse(data['tanggal']?.toString() ?? '');
+
+      return status == 'disetujui' &&
+          tanggal != null &&
+          _isToday(tanggal);
+    }).length;
+  }
+
+  // TOTAL BERAT DISETUJUI HARI INI
+  double get beratHariIni {
+    return dataSetoran.where((data) {
+      final status =
+          data['status']?.toString().toLowerCase() ?? '';
+
+      final tanggal =
+          DateTime.tryParse(data['tanggal']?.toString() ?? '');
+
+      return status == 'disetujui' &&
+          tanggal != null &&
+          _isToday(tanggal);
+    }).fold<double>(
+      0,
+      (total, data) =>
+          total + _toDouble(data['total_berat']),
+    );
+  }
+
+  bool _isToday(DateTime tanggal) {
+    final localDate = tanggal.toLocal();
+    final now = DateTime.now();
+
+    return localDate.year == now.year &&
+        localDate.month == now.month &&
+        localDate.day == now.day;
+  }
+
+  double _toDouble(dynamic value) {
+    if (value == null) return 0;
+    return double.tryParse(value.toString()) ?? 0;
+  }
+
+  String _formatAngka(num value) {
+    final angka = value.toStringAsFixed(0);
+
+    return angka.replaceAllMapped(
+      RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
+      (match) => '${match[1]}.',
+    );
+  }
+
+  String _formatTanggal(dynamic value) {
+    if (value == null) return '-';
+
+    final tanggal = DateTime.tryParse(value.toString());
+
+    if (tanggal == null) return '-';
+
+    final local = tanggal.toLocal();
+    final hari = local.day.toString().padLeft(2, '0');
+    final bulan = local.month.toString().padLeft(2, '0');
+    final tahun = local.year;
+    final jam = local.hour.toString().padLeft(2, '0');
+    final menit = local.minute.toString().padLeft(2, '0');
+
+    return '$hari/$bulan/$tahun • $jam:$menit';
+  }
+
+  void showMessage(String message, {bool error = false}) {
+    if (!mounted) return;
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
@@ -67,8 +193,40 @@ class _VerifikasiSetoranScreenState
           style: const TextStyle(fontSize: 12),
         ),
         behavior: SnackBarBehavior.floating,
+        backgroundColor: error ? Colors.red : darkGreen,
       ),
     );
+  }
+
+  // MEMBUKA HALAMAN DETAIL VERIFIKASI
+  Future<void> _bukaDetailVerifikasi(
+    Map<String, dynamic> data,
+  ) async {
+    final idSetoran = int.tryParse(
+      data['id_setoran'].toString(),
+    );
+
+    if (idSetoran == null) {
+      showMessage(
+        'ID setoran tidak valid.',
+        error: true,
+      );
+      return;
+    }
+
+    final hasil = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => DetailVerifikasiScreen(
+          idSetoran: idSetoran,
+        ),
+      ),
+    );
+
+    if (!mounted) return;
+
+    // MUAT ULANG DATA SETELAH KEMBALI DARI HALAMAN DETAIL
+    await loadData();
   }
 
   @override
@@ -79,39 +237,45 @@ class _VerifikasiSetoranScreenState
         child: Column(
           children: [
             _header(),
-
             Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(10, 12, 10, 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _statistics(),
+              child: RefreshIndicator(
+                color: green,
+                onRefresh: loadData,
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(
+                    10,
+                    12,
+                    10,
+                    12,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _statistics(),
+                      const SizedBox(height: 12),
+                      _searchBar(),
+                      const SizedBox(height: 13),
 
-                    const SizedBox(height: 12),
-
-                    _searchBar(),
-
-                    const SizedBox(height: 13),
-
-                    ...filteredData.map(
-                      (data) => _verificationCard(data),
-                    ),
-
-                    if (filteredData.isEmpty)
-                      const Padding(
-                        padding: EdgeInsets.all(30),
-                        child: Center(
-                          child: Text(
-                            'Data setoran tidak ditemukan.',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: muted,
+                      if (isLoading)
+                        const Padding(
+                          padding: EdgeInsets.all(35),
+                          child: Center(
+                            child: CircularProgressIndicator(
+                              color: green,
                             ),
                           ),
+                        )
+                      else if (errorMessage != null)
+                        _errorView()
+                      else if (filteredData.isEmpty)
+                        _emptyView()
+                      else
+                        ...filteredData.map(
+                          (data) => _verificationCard(data),
                         ),
-                      ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -164,7 +328,7 @@ class _VerifikasiSetoranScreenState
                 ),
                 SizedBox(height: 2),
                 Text(
-                  'SMA Harapan Bangsa • Petugas Piket',
+                  'SMKN 8 MALANG • Petugas Admin',
                   style: TextStyle(
                     fontSize: 12,
                     color: muted,
@@ -173,7 +337,15 @@ class _VerifikasiSetoranScreenState
               ],
             ),
           ),
-          const SizedBox(width: 25),
+          IconButton(
+            onPressed: isLoading ? null : loadData,
+            tooltip: 'Muat ulang',
+            icon: const Icon(
+              Icons.refresh_rounded,
+              size: 21,
+              color: green,
+            ),
+          ),
         ],
       ),
     );
@@ -188,8 +360,8 @@ class _VerifikasiSetoranScreenState
             icon: Icons.access_time_rounded,
             iconColor: const Color(0xFFE99A22),
             title: 'Menunggu',
-            value: '8',
-            subtitle: '',
+            value: isLoading ? '-' : '$jumlahMenunggu',
+            subtitle: 'Antrean',
           ),
         ),
         const SizedBox(width: 7),
@@ -198,7 +370,7 @@ class _VerifikasiSetoranScreenState
             icon: Icons.verified_rounded,
             iconColor: const Color(0xFF159B69),
             title: 'Hari ini',
-            value: '24',
+            value: isLoading ? '-' : '$jumlahDisetujuiHariIni',
             subtitle: 'Disetujui',
           ),
         ),
@@ -208,7 +380,9 @@ class _VerifikasiSetoranScreenState
             icon: Icons.scale_rounded,
             iconColor: const Color(0xFF159BA6),
             title: 'Kg',
-            value: '142.5',
+            value: isLoading
+                ? '-'
+                : beratHariIni.toStringAsFixed(1),
             subtitle: 'Bobot Masuk',
           ),
         ),
@@ -243,27 +417,16 @@ class _VerifikasiSetoranScreenState
         children: [
           Row(
             children: [
-              Icon(
-                icon,
-                size: 14,
-                color: iconColor,
-              ),
+              Icon(icon, size: 14, color: iconColor),
               const Spacer(),
-              if (title == 'Menunggu')
-                const Icon(
-                  Icons.circle,
-                  size: 6,
-                  color: Color(0xFFFFA000),
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: iconColor,
+                  fontWeight: FontWeight.bold,
                 ),
-              if (title != 'Menunggu')
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: iconColor,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+              ),
             ],
           ),
           const SizedBox(height: 5),
@@ -275,22 +438,13 @@ class _VerifikasiSetoranScreenState
               fontWeight: FontWeight.bold,
             ),
           ),
-          if (subtitle.isNotEmpty)
-            Text(
-              subtitle,
-              style: const TextStyle(
-                fontSize: 12,
-                color: muted,
-              ),
-            )
-          else
-            const Text(
-              'Menunggu',
-              style: TextStyle(
-                fontSize: 12,
-                color: ink,
-              ),
+          Text(
+            subtitle,
+            style: const TextStyle(
+              fontSize: 10,
+              color: muted,
             ),
+          ),
         ],
       ),
     );
@@ -323,9 +477,9 @@ class _VerifikasiSetoranScreenState
                 color: ink,
               ),
               decoration: const InputDecoration(
-                hintText: 'Cari nama penyetor atau kelas...',
+                hintText: 'Cari nama akun, kelas, atau sampah...',
                 hintStyle: TextStyle(
-                  fontSize: 12,
+                  fontSize: 11,
                   color: muted,
                 ),
                 border: InputBorder.none,
@@ -333,17 +487,74 @@ class _VerifikasiSetoranScreenState
               ),
             ),
           ),
-          IconButton(
-            onPressed: _showFilter,
-            icon: const Icon(
-              Icons.tune_rounded,
-              size: 17,
+          if (searchController.text.isNotEmpty)
+            IconButton(
+              onPressed: () {
+                searchController.clear();
+                setState(() {});
+              },
+              icon: const Icon(
+                Icons.close_rounded,
+                size: 17,
+                color: muted,
+              ),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(
+                minWidth: 28,
+                minHeight: 28,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  // ERROR
+  Widget _errorView() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: border),
+      ),
+      child: Column(
+        children: [
+          const Icon(
+            Icons.cloud_off_rounded,
+            size: 35,
+            color: Colors.redAccent,
+          ),
+          const SizedBox(height: 9),
+          const Text(
+            'Gagal Memuat Data',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              color: ink,
+            ),
+          ),
+          const SizedBox(height: 5),
+          Text(
+            errorMessage ?? 'Terjadi kesalahan.',
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 10,
               color: muted,
             ),
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(
-              minWidth: 28,
-              minHeight: 28,
+          ),
+          const SizedBox(height: 12),
+          ElevatedButton.icon(
+            onPressed: loadData,
+            icon: const Icon(Icons.refresh, size: 15),
+            label: const Text(
+              'Coba Lagi',
+              style: TextStyle(fontSize: 11),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: darkGreen,
+              foregroundColor: Colors.white,
             ),
           ),
         ],
@@ -351,66 +562,57 @@ class _VerifikasiSetoranScreenState
     );
   }
 
-  // FILTER
-  void _showFilter() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(20),
-        ),
+  // DATA KOSONG
+  Widget _emptyView() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(
+        horizontal: 20,
+        vertical: 35,
       ),
-      builder: (context) {
-        return Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Filter Setoran',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: ink,
-                ),
-              ),
-              const SizedBox(height: 15),
-              const Text(
-                'Status: Menunggu Verifikasi',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: muted,
-                ),
-              ),
-              const SizedBox(height: 15),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.pop(context);
-                    showMessage('Filter diterapkan.');
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: darkGreen,
-                    foregroundColor: Colors.white,
-                  ),
-                  child: const Text(
-                    'Terapkan Filter',
-                    style: TextStyle(fontSize: 12),
-                  ),
-                ),
-              ),
-            ],
+      child: const Column(
+        children: [
+          Icon(
+            Icons.inbox_outlined,
+            size: 48,
+            color: Color(0xFFB6C4BC),
           ),
-        );
-      },
+          SizedBox(height: 10),
+          Text(
+            'Belum Ada Setoran Menunggu',
+            style: TextStyle(
+              fontSize: 13,
+              color: ink,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          SizedBox(height: 5),
+          Text(
+            'Setoran dari akun kelas akan muncul di sini '
+            'setelah berhasil dikirim.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 11,
+              color: muted,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
   // KARTU VERIFIKASI
   Widget _verificationCard(Map<String, dynamic> data) {
+    final detail = List<Map<String, dynamic>>.from(
+      data['detail'] ?? [],
+    );
+
+    final namaKelas =
+        data['nama_kelas']?.toString() ?? '-';
+
+    final totalBerat = _toDouble(data['total_berat']);
+    final totalNilai = _toDouble(data['total_nilai']);
+
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: 11),
@@ -452,10 +654,9 @@ class _VerifikasiSetoranScreenState
                     ),
                     SizedBox(width: 4),
                     Text(
-                      'Menunggu\nVerifikasi',
+                      'Menunggu Verifikasi',
                       style: TextStyle(
-                        fontSize: 12,
-                        height: 1.1,
+                        fontSize: 10,
                         color: Color(0xFFB77913),
                         fontWeight: FontWeight.w600,
                       ),
@@ -465,19 +666,17 @@ class _VerifikasiSetoranScreenState
               ),
               const Spacer(),
               Text(
-                data['time'],
+                _formatTanggal(data['tanggal']),
                 style: const TextStyle(
-                  fontSize: 12,
-                  height: 1.2,
+                  fontSize: 10,
                   color: muted,
                 ),
               ),
             ],
           ),
+          const SizedBox(height: 8),
 
-          const SizedBox(height: 7),
-
-          // IDENTITAS PENYETOR
+          // IDENTITAS KELAS
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(8),
@@ -488,54 +687,48 @@ class _VerifikasiSetoranScreenState
             child: Row(
               children: [
                 Container(
-                  width: 25,
-                  height: 25,
+                  width: 28,
+                  height: 28,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     color: darkGreen,
                     borderRadius: BorderRadius.circular(7),
                   ),
-                  child: Text(
-                    data['initials'],
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  child: const Icon(
+                    Icons.school_rounded,
+                    size: 16,
+                    color: Colors.white,
                   ),
                 ),
                 const SizedBox(width: 8),
-                Text(
-                  data['name'],
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: ink,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(width: 5),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 5,
-                    vertical: 3,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE4EDFC),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    data['class'],
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: muted,
-                    ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        namaKelas,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: ink,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Text(
+                        '${data['tingkat'] ?? ''} '
+                        '${data['jurusan'] ?? ''}'.trim(),
+                        style: const TextStyle(
+                          fontSize: 10,
+                          color: muted,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
           ),
 
-          const SizedBox(height: 7),
+          const SizedBox(height: 8),
 
           // DETAIL SAMPAH
           Container(
@@ -546,78 +739,106 @@ class _VerifikasiSetoranScreenState
               borderRadius: BorderRadius.circular(9),
               border: Border.all(color: border),
             ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  flex: 3,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Jenis Sampah',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: muted,
-                        ),
-                      ),
-                      const SizedBox(height: 5),
-                      Row(
+                const Text(
+                  'Detail Sampah',
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: muted,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 6),
+
+                if (detail.isEmpty)
+                  const Text(
+                    'Belum ada detail sampah.',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: muted,
+                    ),
+                  )
+                else
+                  ...detail.map((item) {
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 5),
+                      child: Row(
                         children: [
                           const Icon(
                             Icons.recycling_rounded,
                             size: 13,
                             color: green,
                           ),
-                          const SizedBox(width: 4),
+                          const SizedBox(width: 5),
                           Expanded(
                             child: Text(
-                              data['category'],
+                              item['nama_sampah']?.toString() ?? '-',
                               style: const TextStyle(
-                                fontSize: 12,
+                                fontSize: 11,
                                 color: ink,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
                           ),
+                          Text(
+                            '${_toDouble(item['berat_kg']).toStringAsFixed(1)} Kg',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: green,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                         ],
                       ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 5),
-                Expanded(
-                  flex: 2,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      const Text(
-                        'Bobot & Nilai Kas',
-                        textAlign: TextAlign.end,
+                    );
+                  }),
+
+                const Divider(height: 12),
+
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Total Berat',
                         style: TextStyle(
-                          fontSize: 12,
+                          fontSize: 10,
                           color: muted,
                         ),
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        data['weight'],
-                        style: const TextStyle(
-                          fontSize: 14,
-                          color: green,
-                          fontWeight: FontWeight.bold,
+                    ),
+                    Text(
+                      '${totalBerat.toStringAsFixed(1)} Kg',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: green,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Estimasi Nilai',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: muted,
                         ),
                       ),
-                      Text(
-                        data['reward'],
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: green,
-                          fontWeight: FontWeight.w600,
-                        ),
+                    ),
+                    Text(
+                      'Rp ${_formatAngka(totalNilai)}',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: green,
+                        fontWeight: FontWeight.bold,
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -625,24 +846,20 @@ class _VerifikasiSetoranScreenState
 
           const SizedBox(height: 9),
 
-          // TOMBOL VERIFIKASI
+          // LANGSUNG BUKA HALAMAN DETAIL, TANPA MODAL
           SizedBox(
             width: double.infinity,
             height: 37,
             child: ElevatedButton.icon(
-              onPressed: () {
-                showMessage(
-                  'Membuka verifikasi setoran ${data['name']}',
-                );
-              },
+              onPressed: () => _bukaDetailVerifikasi(data),
               icon: const Icon(
                 Icons.verified_user_outlined,
-                size: 13,
+                size: 14,
               ),
               label: const Text(
                 'Verifikasi Sekarang',
                 style: TextStyle(
-                  fontSize: 12,
+                  fontSize: 11,
                   fontWeight: FontWeight.w600,
                 ),
               ),

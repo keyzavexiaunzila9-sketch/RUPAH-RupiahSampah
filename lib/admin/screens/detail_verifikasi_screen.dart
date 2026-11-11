@@ -1,33 +1,15 @@
-import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
+
+import '../../core/services/verifikasi_service.dart';
 import 'tolak_setoran_screen.dart';
 
 class DetailVerifikasiScreen extends StatefulWidget {
-  final String nama;
-  final String kelas;
-  final String tanggal;
-  final String kategori;
-  final String namaSampah;
-  final double berat;
-  final double beratTimbang;
-  final String estimasi;
-  final String nomorSetoran;
-  final Uint8List? fotoSetoran;
-  final Uint8List? fotoTimbangan;
+  final int idSetoran;
 
   const DetailVerifikasiScreen({
     super.key,
-    this.nama = 'Dimas Pratama',
-    this.kelas = 'XI RPL 1',
-    this.tanggal = '28 Oktober 2026',
-    this.kategori = 'Anorganik Campuran Plastik & Kardus',
-    this.namaSampah = 'Botol PET Bening (Grade A)',
-    this.berat = 8.5,
-    this.beratTimbang = 5.2,
-    this.estimasi = 'Rp 17.000',
-    this.nomorSetoran = 'RPH-2026-001',
-    this.fotoSetoran,
-    this.fotoTimbangan,
+    required this.idSetoran,
   });
 
   @override
@@ -37,30 +19,30 @@ class DetailVerifikasiScreen extends StatefulWidget {
 
 class _DetailVerifikasiScreenState
     extends State<DetailVerifikasiScreen> {
-  static const green = Color(0xFF087A4F);
-  static const darkGreen = Color(0xFF006B43);
-  static const background = Color(0xFFF5F7FC);
-  static const ink = Color(0xFF26352F);
-  static const muted = Color(0xFF78857F);
-  static const border = Color(0xFFE8EDF2);
-  static const orange = Color(0xFFE59A26);
-  static const red = Color(0xFFD93636);
+  static const Color green = Color(0xFF087A4F);
+  static const Color darkGreen = Color(0xFF006B43);
+  static const Color background = Color(0xFFF5F7FC);
+  static const Color ink = Color(0xFF26352F);
+  static const Color muted = Color(0xFF78857F);
+  static const Color border = Color(0xFFE8EDF2);
+  static const Color orange = Color(0xFFE59A26);
+  static const Color red = Color(0xFFD93636);
 
-  final List<bool> auditChecks = [
-    true,
-    false,
-    true,
-    false,
-    false,
-  ];
-
+  final VerifikasiService _service = VerifikasiService();
   final TextEditingController catatanController =
-      TextEditingController(
-    text: 'Ditemukan beberapa bagian plastik yang perlu diperiksa '
-        'lebih lanjut. Pastikan berat sesuai dengan kondisi sampah.',
-  );
+      TextEditingController();
 
-  int selectedDecision = 1;
+  Map<String, dynamic>? dataSetoran;
+
+  bool isLoading = true;
+  bool isProcessing = false;
+  String? errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    loadDetail();
+  }
 
   @override
   void dispose() {
@@ -68,7 +50,99 @@ class _DetailVerifikasiScreenState
     super.dispose();
   }
 
-  void showMessage(String message) {
+  // MEMUAT DETAIL SETORAN DARI SUPABASE
+  Future<void> loadDetail() async {
+    if (!mounted) return;
+
+    setState(() {
+      isLoading = true;
+      errorMessage = null;
+    });
+
+    try {
+      final semuaData = await _service.getDataSetoran();
+
+      final hasil = semuaData.where((item) {
+        return item['id_setoran'].toString() ==
+            widget.idSetoran.toString();
+      }).toList();
+
+      if (hasil.isEmpty) {
+        throw Exception('Data setoran tidak ditemukan.');
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        dataSetoran = hasil.first;
+        isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        errorMessage = e.toString();
+        isLoading = false;
+      });
+    }
+  }
+
+  double _toDouble(dynamic value) {
+    if (value == null) return 0;
+
+    return double.tryParse(value.toString()) ?? 0;
+  }
+
+  String _formatAngka(num value) {
+    final angka = value.toStringAsFixed(0);
+
+    return angka.replaceAllMapped(
+      RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
+      (match) => '${match[1]}.',
+    );
+  }
+
+  String _formatTanggal(dynamic value) {
+    if (value == null) return '-';
+
+    final tanggal = DateTime.tryParse(value.toString());
+
+    if (tanggal == null) return '-';
+
+    final local = tanggal.toLocal();
+
+    final hari = local.day.toString().padLeft(2, '0');
+    final bulan = local.month.toString().padLeft(2, '0');
+    final tahun = local.year;
+    final jam = local.hour.toString().padLeft(2, '0');
+    final menit = local.minute.toString().padLeft(2, '0');
+
+    return '$hari/$bulan/$tahun • $jam:$menit';
+  }
+
+  List<Map<String, dynamic>> get detailSampah {
+    if (dataSetoran == null) return [];
+
+    return List<Map<String, dynamic>>.from(
+      dataSetoran!['detail'] ?? [],
+    );
+  }
+
+  String get namaSampah {
+    if (detailSampah.isEmpty) return '-';
+
+    return detailSampah
+        .map((item) => item['nama_sampah']?.toString() ?? '-')
+        .join(', ');
+  }
+
+  // PESAN
+  void showMessage(
+    String message, {
+    bool error = false,
+  }) {
+    if (!mounted) return;
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
@@ -76,56 +150,166 @@ class _DetailVerifikasiScreenState
           style: const TextStyle(fontSize: 12),
         ),
         behavior: SnackBarBehavior.floating,
+        backgroundColor: error ? red : darkGreen,
       ),
     );
   }
 
-  Future<void> konfirmasiKeputusan(bool diterima) async {
+  // KONFIRMASI PERSETUJUAN
+  Future<bool> _konfirmasiSetuju() async {
     final hasil = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(
-          diterima ? 'Setujui Setoran?' : 'Tolak Setoran?',
-          style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
+      builder: (dialogContext) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(15),
           ),
+          title: const Text(
+            'Setujui Setoran?',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.bold,
+              color: ink,
+            ),
+          ),
+          content: const Text(
+            'Apakah kamu yakin ingin menyetujui setoran ini?',
+            style: TextStyle(
+              fontSize: 12,
+              color: muted,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(dialogContext, false);
+              },
+              child: const Text(
+                'Batal',
+                style: TextStyle(color: muted),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(dialogContext, true);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: green,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text(
+                'Ya, Setujui',
+                style: TextStyle(fontSize: 12),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    return hasil == true;
+  }
+
+  // MENYETUJUI SETORAN
+  Future<void> setujuiSetoran() async {
+    if (dataSetoran == null || isProcessing) return;
+
+    final status =
+        dataSetoran!['status']?.toString().toLowerCase();
+
+    if (status != 'menunggu') {
+      showMessage(
+        'Setoran ini sudah tidak menunggu verifikasi.',
+        error: true,
+      );
+      await loadDetail();
+      return;
+    }
+
+    final yakin = await _konfirmasiSetuju();
+
+    if (!yakin || !mounted) return;
+
+    setState(() {
+      isProcessing = true;
+    });
+
+    try {
+      final catatan = catatanController.text.trim();
+
+      await _service.verifikasiSetoran(
+        idSetoran: widget.idSetoran,
+        status: 'disetujui',
+        catatan: catatan.isEmpty ? null : catatan,
+      );
+
+      if (!mounted) return;
+
+      showMessage('Setoran berhasil disetujui.');
+
+      // KEMBALI KE DAFTAR DAN MEMICU REFRESH
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        isProcessing = false;
+      });
+
+      showMessage(
+        'Gagal menyetujui setoran: $e',
+        error: true,
+      );
+    }
+  }
+
+  // MEMBUKA HALAMAN PENOLAKAN
+  Future<void> tolakSetoran() async {
+    if (dataSetoran == null || isProcessing) return;
+
+    final status =
+        dataSetoran!['status']?.toString().toLowerCase();
+
+    if (status != 'menunggu') {
+      showMessage(
+        'Setoran ini sudah tidak menunggu verifikasi.',
+        error: true,
+      );
+      await loadDetail();
+      return;
+    }
+
+    final data = dataSetoran!;
+
+    setState(() {
+      isProcessing = true;
+    });
+
+    final hasil = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => TolakSetoranScreen(
+          idSetoran: widget.idSetoran,
+          nama: data['username']?.toString() ?? '-',
+          kelas: data['nama_kelas']?.toString() ?? '-',
+          jenisSampah: namaSampah,
+          berat:
+              '${_toDouble(data['total_berat']).toStringAsFixed(1)} Kg',
+          nilaiKas:
+              'Rp ${_formatAngka(_toDouble(data['total_nilai']))}',
         ),
-        content: Text(
-          diterima
-              ? 'Setoran akan disetujui dan saldo kelas akan dicairkan.'
-              : 'Setoran ini akan ditolak berdasarkan hasil pemeriksaan.',
-          style: const TextStyle(fontSize: 12),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text(
-              'Batal',
-              style: TextStyle(fontSize: 12),
-            ),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: diterima ? green : red,
-              foregroundColor: Colors.white,
-            ),
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(
-              diterima ? 'Setujui' : 'Tolak',
-              style: const TextStyle(fontSize: 12),
-            ),
-          ),
-        ],
       ),
     );
 
-    if (hasil == true && mounted) {
-      showMessage(
-        diterima
-            ? 'Setoran berhasil disetujui.'
-            : 'Setoran berhasil ditolak.',
-      );
+    if (!mounted) return;
+
+    setState(() {
+      isProcessing = false;
+    });
+
+    if (hasil == true) {
+      // FORM PENOLAKAN BERHASIL MENYIMPAN DATA
+      Navigator.pop(context, true);
     }
   }
 
@@ -149,7 +333,7 @@ class _DetailVerifikasiScreenState
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Audit & Verifikasi Setoran',
+              'Detail Verifikasi',
               style: TextStyle(
                 color: green,
                 fontSize: 14,
@@ -160,102 +344,133 @@ class _DetailVerifikasiScreenState
               'PEMERIKSAAN DATA SETORAN',
               style: TextStyle(
                 color: muted,
-                fontSize: 12,
+                fontSize: 11,
               ),
             ),
           ],
         ),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(12, 10, 12, 20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _warningCard(),
-
-            const SizedBox(height: 12),
-
-            _identitasCard(),
-
-            const SizedBox(height: 12),
-
-            _auditCard(),
-
-            const SizedBox(height: 12),
-
-            _decisionCard(),
-
-            const SizedBox(height: 12),
-
-            _bottomButtons(),
-          ],
-        ),
-      ),
+      body: isLoading
+          ? const Center(
+              child: CircularProgressIndicator(
+                color: green,
+              ),
+            )
+          : errorMessage != null
+              ? _errorView()
+              : dataSetoran == null
+                  ? _emptyView()
+                  : _content(),
     );
   }
 
-  // PERINGATAN
-  Widget _warningCard() {
+  // KONTEN DETAIL
+  Widget _content() {
+    final data = dataSetoran!;
+
+    final totalBerat = _toDouble(data['total_berat']);
+    final totalNilai = _toDouble(data['total_nilai']);
+
+    final status =
+        data['status']?.toString().toLowerCase() ?? '-';
+
+    final fotoUrl = data['foto_url']?.toString();
+
+    return Column(
+      children: [
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(
+              12,
+              12,
+              12,
+              15,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _statusCard(status),
+                const SizedBox(height: 12),
+                _identitasCard(data),
+                const SizedBox(height: 12),
+                _detailSampahCard(),
+                const SizedBox(height: 12),
+                _ringkasanCard(totalBerat, totalNilai),
+                const SizedBox(height: 12),
+                _fotoSetoranCard(fotoUrl),
+                const SizedBox(height: 12),
+                _catatanCard(),
+              ],
+            ),
+          ),
+        ),
+
+        // TOMBOL KEPUTUSAN
+        if (status == 'menunggu')
+          _bottomButtons()
+        else
+          _statusSelesai(status),
+      ],
+    );
+  }
+
+  // STATUS SETORAN
+  Widget _statusCard(String status) {
+    final bool menunggu = status == 'menunggu';
+
+    final Color warna =
+        menunggu ? orange : green;
+
+    final String label =
+        menunggu ? 'Menunggu Verifikasi' : status.toUpperCase();
+
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF8E7),
+        color: menunggu
+            ? const Color(0xFFFFF8E7)
+            : const Color(0xFFEAF5EF),
         borderRadius: BorderRadius.circular(13),
         border: Border.all(
-          color: const Color(0xFFFFE2A0),
+          color: menunggu
+              ? const Color(0xFFFFE2A0)
+              : const Color(0xFFCDE7D8),
         ),
       ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(
-            Icons.warning_amber_rounded,
-            color: orange,
-            size: 21,
+          Icon(
+            menunggu
+                ? Icons.access_time_rounded
+                : Icons.verified_rounded,
+            color: warna,
+            size: 22,
           ),
           const SizedBox(width: 9),
-          const Expanded(
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Sedang Diperiksa',
+                  label,
                   style: TextStyle(
-                    fontSize: 14,
+                    fontSize: 13,
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFF9A6412),
+                    color: warna,
                   ),
                 ),
-                SizedBox(height: 4),
+                const SizedBox(height: 3),
                 Text(
-                  'Periksa kesesuaian data setoran, foto bukti, '
-                  'dan hasil penimbangan sebelum memberikan keputusan.',
+                  menunggu
+                      ? 'Setoran perlu diperiksa oleh admin.'
+                      : 'Status setoran sudah diperbarui.',
                   style: TextStyle(
-                    fontSize: 12,
-                    height: 1.4,
-                    color: Color(0xFF80652F),
+                    fontSize: 11,
+                    color: warna,
                   ),
                 ),
               ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 8,
-              vertical: 4,
-            ),
-            decoration: BoxDecoration(
-              color: const Color(0xFFFFEDC3),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: const Text(
-              'PRIORITAS',
-              style: TextStyle(
-                fontSize: 12,
-                color: Color(0xFF9A6412),
-                fontWeight: FontWeight.bold,
-              ),
             ),
           ),
         ],
@@ -263,152 +478,165 @@ class _DetailVerifikasiScreenState
     );
   }
 
-  // IDENTITAS DAN BUKTI SETORAN
-  Widget _identitasCard() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: border),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.025),
-            blurRadius: 7,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
+  // IDENTITAS PENYETOR
+  Widget _identitasCard(Map<String, dynamic> data) {
+    return _card(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              const Icon(
-                Icons.receipt_long_rounded,
-                color: green,
-                size: 15,
-              ),
-              const SizedBox(width: 6),
-              const Expanded(
-                child: Text(
-                  'IDENTITAS PENYETOR',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: green,
-                  ),
-                ),
-              ),
-              _pill('Data Sesuai', green),
-            ],
+          _sectionTitle(
+            Icons.person_outline_rounded,
+            'Identitas Penyetor',
           ),
-
           const SizedBox(height: 12),
-
           Text(
-            widget.nama,
+            data['username']?.toString() ?? '-',
             style: const TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.bold,
               color: ink,
             ),
           ),
-
-          const SizedBox(height: 3),
-
-          Text(
-            'ID Setoran: ${widget.nomorSetoran}',
-            style: const TextStyle(
-              fontSize: 12,
-              color: muted,
-            ),
-          ),
-
           const SizedBox(height: 12),
-
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF5F8FC),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: _infoItem(
-                    Icons.groups_rounded,
-                    'KELAS PENYETOR',
-                    widget.kelas,
-                  ),
-                ),
-                Expanded(
-                  child: _infoItem(
-                    Icons.calendar_month_rounded,
-                    'WAKTU SETORAN',
-                    widget.tanggal,
-                  ),
-                ),
-              ],
-            ),
+          _infoRow(
+            Icons.confirmation_number_outlined,
+            'ID Setoran',
+            '#${widget.idSetoran}',
           ),
-
-          const SizedBox(height: 12),
-
-          _infoItem(
-            Icons.recycling_rounded,
-            'KATEGORI',
-            widget.kategori,
-          ),
-
           const SizedBox(height: 10),
+          _infoRow(
+            Icons.school_outlined,
+            'Kelas',
+            data['nama_kelas']?.toString() ?? '-',
+          ),
+          const SizedBox(height: 10),
+          _infoRow(
+            Icons.calendar_month_outlined,
+            'Tanggal Setoran',
+            _formatTanggal(data['tanggal']),
+          ),
+        ],
+      ),
+    );
+  }
 
+  // DETAIL SAMPAH
+  Widget _detailSampahCard() {
+    return _card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _sectionTitle(
+            Icons.recycling_rounded,
+            'Detail Sampah',
+          ),
+          const SizedBox(height: 12),
+
+          if (detailSampah.isEmpty)
+            const Text(
+              'Belum ada detail sampah.',
+              style: TextStyle(
+                fontSize: 12,
+                color: muted,
+              ),
+            )
+          else
+            ...detailSampah.map((item) {
+              final berat = _toDouble(item['berat_kg']);
+
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF7FAFC),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: border),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE5F3EB),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(
+                        Icons.recycling_rounded,
+                        color: green,
+                        size: 19,
+                      ),
+                    ),
+                    const SizedBox(width: 9),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            item['nama_sampah']?.toString() ?? '-',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: ink,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            item['kategori']?.toString() ?? '-',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: muted,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Text(
+                      '${berat.toStringAsFixed(1)} Kg',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: green,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+        ],
+      ),
+    );
+  }
+
+  // RINGKASAN SETORAN
+  Widget _ringkasanCard(
+    double totalBerat,
+    double totalNilai,
+  ) {
+    return _card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _sectionTitle(
+            Icons.receipt_long_rounded,
+            'Ringkasan Setoran',
+          ),
+          const SizedBox(height: 12),
           Row(
             children: [
               Expanded(
-                child: _weightBox(
-                  title: 'BERAT AWAL',
-                  weight: widget.berat,
-                  subtitle: 'Estimasi ${widget.estimasi}',
-                  isError: false,
+                child: _summaryItem(
+                  'Total Berat',
+                  '${totalBerat.toStringAsFixed(1)} Kg',
+                  Icons.scale_outlined,
                 ),
               ),
               const SizedBox(width: 9),
               Expanded(
-                child: _weightBox(
-                  title: 'TIMBANGAN ADMIN',
-                  weight: widget.beratTimbang,
-                  subtitle: 'Selisih ${(widget.berat - widget.beratTimbang).abs().toStringAsFixed(1)} Kg',
-                  isError: true,
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 15),
-
-          _sectionTitle(
-            Icons.photo_library_outlined,
-            'PERBANDINGAN FOTO SETORAN',
-          ),
-
-          const SizedBox(height: 8),
-
-          Row(
-            children: [
-              Expanded(
-                child: _photoBox(
-                  title: 'Foto Penyetor',
-                  bytes: widget.fotoSetoran,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _photoBox(
-                  title: 'Foto Timbangan Admin',
-                  bytes: widget.fotoTimbangan,
-                  isAdmin: true,
+                child: _summaryItem(
+                  'Estimasi Nilai',
+                  'Rp ${_formatAngka(totalNilai)}',
+                  Icons.account_balance_wallet_outlined,
                 ),
               ),
             ],
@@ -418,91 +646,36 @@ class _DetailVerifikasiScreenState
     );
   }
 
-  // INFORMASI
-  Widget _infoItem(
-    IconData icon,
+  Widget _summaryItem(
     String title,
     String value,
+    IconData icon,
   ) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(icon, size: 15, color: green),
-        const SizedBox(width: 6),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: muted,
-                ),
-              ),
-              const SizedBox(height: 3),
-              Text(
-                value,
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: ink,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  // KOTAK BERAT
-  Widget _weightBox({
-    required String title,
-    required double weight,
-    required String subtitle,
-    required bool isError,
-  }) {
-    final color = isError ? red : green;
-
     return Container(
-      padding: const EdgeInsets.all(10),
+      padding: const EdgeInsets.all(11),
       decoration: BoxDecoration(
-        color: isError
-            ? const Color(0xFFFFF3F2)
-            : const Color(0xFFF1F6FF),
-        borderRadius: BorderRadius.circular(11),
-        border: Border.all(
-          color: isError
-              ? const Color(0xFFFFC8C5)
-              : const Color(0xFFDCE6F5),
-        ),
+        color: const Color(0xFFF1F7F3),
+        borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Icon(icon, color: green, size: 19),
+          const SizedBox(height: 8),
           Text(
             title,
             style: const TextStyle(
-              fontSize: 12,
+              fontSize: 11,
               color: muted,
             ),
           ),
-          const SizedBox(height: 5),
+          const SizedBox(height: 4),
           Text(
-            '${weight.toStringAsFixed(1)} Kg',
-            style: TextStyle(
-              fontSize: 14,
+            value,
+            style: const TextStyle(
+              fontSize: 13,
+              color: darkGreen,
               fontWeight: FontWeight.bold,
-              color: color,
-            ),
-          ),
-          const SizedBox(height: 3),
-          Text(
-            subtitle,
-            style: TextStyle(
-              fontSize: 12,
-              color: color,
             ),
           ),
         ],
@@ -510,217 +683,109 @@ class _DetailVerifikasiScreenState
     );
   }
 
-  // FOTO BUKTI
-  Widget _photoBox({
-    required String title,
-    Uint8List? bytes,
-    bool isAdmin = false,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(10),
-          child: Container(
-            height: 105,
-            width: double.infinity,
-            color: const Color(0xFFE6EEFF),
-            child: bytes != null
-                ? Image.memory(
-                    bytes,
-                    fit: BoxFit.cover,
-                  )
-                : Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        isAdmin
-                            ? Icons.add_a_photo_outlined
-                            : Icons.image_outlined,
-                        size: 25,
-                        color: muted,
+  // FOTO SETORAN DARI SUPABASE STORAGE
+  Widget _fotoSetoranCard(String? fotoUrl) {
+    final url = fotoUrl?.trim() ?? '';
+
+    return _card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _sectionTitle(
+            Icons.photo_outlined,
+            'Foto Bukti Setoran',
+          ),
+          const SizedBox(height: 10),
+          if (url.isEmpty)
+            Container(
+              width: double.infinity,
+              height: 140,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF7FAFC),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: border),
+              ),
+              child: const Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.image_not_supported_outlined,
+                    size: 30,
+                    color: muted,
+                  ),
+                  SizedBox(height: 7),
+                  Text(
+                    'Foto setoran tidak tersedia.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: muted,
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: Image.network(
+                url,
+                width: double.infinity,
+                height: 210,
+                fit: BoxFit.cover,
+                loadingBuilder: (context, child, progress) {
+                  if (progress == null) return child;
+
+                  return const SizedBox(
+                    height: 140,
+                    child: Center(
+                      child: CircularProgressIndicator(
+                        color: green,
                       ),
-                      const SizedBox(height: 5),
-                      Text(
-                        isAdmin
-                            ? 'Foto belum tersedia'
-                            : 'Bukti penyetor',
-                        style: const TextStyle(
+                    ),
+                  );
+                },
+                errorBuilder: (context, error, stackTrace) {
+                  return Container(
+                    width: double.infinity,
+                    height: 140,
+                    color: const Color(0xFFF7FAFC),
+                    child: const Center(
+                      child: Text(
+                        'Foto gagal dimuat.',
+                        style: TextStyle(
                           fontSize: 12,
                           color: muted,
                         ),
                       ),
-                    ],
-                  ),
-          ),
-        ),
-        const SizedBox(height: 5),
-        Text(
-          title,
-          style: const TextStyle(
-            fontSize: 12,
-            color: muted,
-          ),
-        ),
-      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+        ],
+      ),
     );
   }
 
-  // AUDIT
-  Widget _auditCard() {
-    final auditTitles = [
-      'Berat Timbangan Tidak Sesuai',
-      'Foto Bukti Tidak Sesuai / Duplikasi',
-      'Sampah Bersih, Aman, dan Terpilah',
-      'Data Setoran Tidak Cocok',
-      'Indikasi Pelanggaran Berulang',
-    ];
-
-    final auditDescriptions = [
-      'Periksa perbedaan berat antara penyetor dan hasil timbang admin.',
-      'Pastikan foto merupakan bukti asli dan bukan hasil duplikasi.',
-      'Pastikan sampah tidak tercampur bahan berbahaya.',
-      'Cocokkan kategori, tanggal, dan data setoran.',
-      'Periksa kemungkinan kecurangan atau manipulasi data.',
-    ];
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: const Color(0xFFFFD879),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.025),
-            blurRadius: 7,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
+  // CATATAN ADMIN
+  Widget _catatanCard() {
+    return _card(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              const Expanded(
-                child: Text(
-                  'Investigasi & Audit',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: ink,
-                  ),
-                ),
-              ),
-              _pill('Perlu Pemeriksaan', orange),
-            ],
+          _sectionTitle(
+            Icons.edit_note_rounded,
+            'Catatan Pemeriksaan Admin',
           ),
-
-          const Divider(height: 18),
-
-          const Text(
-            'Kategori Indikasi Masalah:',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-              color: ink,
-            ),
-          ),
-
           const SizedBox(height: 8),
-
-          ...List.generate(auditTitles.length, (index) {
-            return _auditItem(
-              index: index,
-              title: auditTitles[index],
-              description: auditDescriptions[index],
-            );
-          }),
-
-          const SizedBox(height: 12),
-
           const Text(
-            'Foto Bukti Pendukung Tambahan',
+            'Catatan ini akan disimpan bersama hasil verifikasi.',
             style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-              color: ink,
+              fontSize: 11,
+              color: muted,
             ),
           ),
-
-          const SizedBox(height: 7),
-
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF7FAFC),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: const Color(0xFFD6E2DD),
-                style: BorderStyle.solid,
-              ),
-            ),
-            child: const Column(
-              children: [
-                Icon(
-                  Icons.add_photo_alternate_outlined,
-                  size: 26,
-                  color: Color(0xFF6BC9C1),
-                ),
-                SizedBox(height: 5),
-                Text(
-                  'Belum ada foto tambahan',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: green,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                SizedBox(height: 3),
-                Text(
-                  'Bukti tambahan dapat digunakan untuk '
-                  'memperkuat hasil pemeriksaan.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: muted,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 12),
-
-          Row(
-            children: [
-              const Expanded(
-                child: Text(
-                  'Catatan Pemeriksaan Admin',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: ink,
-                  ),
-                ),
-              ),
-              const Text(
-                'Wajib diperiksa',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: green,
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 6),
-
+          const SizedBox(height: 9),
           TextField(
             controller: catatanController,
             maxLines: 3,
@@ -736,7 +801,7 @@ class _DetailVerifikasiScreenState
               ),
               filled: true,
               fillColor: const Color(0xFFF9FAFC),
-              contentPadding: const EdgeInsets.all(10),
+              contentPadding: const EdgeInsets.all(11),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(9),
                 borderSide: const BorderSide(color: border),
@@ -747,58 +812,85 @@ class _DetailVerifikasiScreenState
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
 
-          const SizedBox(height: 12),
-
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF5F8FC),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Row(
-              children: [
-                CircleAvatar(
-                  radius: 15,
-                  backgroundColor: Color(0xFFDDF3E7),
-                  child: Icon(
-                    Icons.admin_panel_settings_rounded,
-                    size: 17,
-                    color: green,
-                  ),
+  // TOMBOL KEPUTUSAN
+  Widget _bottomButtons() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(
+          top: BorderSide(color: border),
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: SizedBox(
+              height: 44,
+              child: OutlinedButton.icon(
+                onPressed: isProcessing ? null : tolakSetoran,
+                icon: const Icon(
+                  Icons.close_rounded,
+                  size: 17,
                 ),
-                SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Auditor Admin',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: ink,
-                        ),
-                      ),
-                      Text(
-                        'Petugas Verifikasi',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: muted,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Text(
-                  'Terverifikasi',
+                label: const Text(
+                  'Tolak Setoran',
                   style: TextStyle(
                     fontSize: 12,
-                    color: green,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-              ],
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: red,
+                  side: const BorderSide(color: red),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 9),
+          Expanded(
+            child: SizedBox(
+              height: 44,
+              child: ElevatedButton.icon(
+                onPressed:
+                    isProcessing ? null : setujuiSetoran,
+                icon: isProcessing
+                    ? const SizedBox(
+                        width: 15,
+                        height: 15,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(
+                        Icons.verified_rounded,
+                        size: 16,
+                      ),
+                label: Text(
+                  isProcessing ? 'Memproses...' : 'Setujui',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: green,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
             ),
           ),
         ],
@@ -806,66 +898,143 @@ class _DetailVerifikasiScreenState
     );
   }
 
-  Widget _auditItem({
-    required int index,
-    required String title,
-    required String description,
-  }) {
-    final checked = auditChecks[index];
+  // STATUS SETELAH VERIFIKASI
+  Widget _statusSelesai(String status) {
+    final disetujui = status == 'disetujui';
 
-    return InkWell(
-      onTap: () {
-        setState(() {
-          auditChecks[index] = !auditChecks[index];
-        });
-      },
-      borderRadius: BorderRadius.circular(9),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 7),
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: checked
-              ? const Color(0xFFF0F8F4)
-              : Colors.white,
-          borderRadius: BorderRadius.circular(9),
-          border: Border.all(
-            color: checked
-                ? const Color(0xFFB9DCCB)
-                : border,
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      color: Colors.white,
+      child: Text(
+        disetujui
+            ? 'Setoran ini sudah disetujui.'
+            : 'Setoran ini sudah ditolak.',
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.bold,
+          color: disetujui ? green : red,
+        ),
+      ),
+    );
+  }
+
+  // KOMPONEN CARD
+  Widget _card({required Widget child}) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: border),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.025),
+            blurRadius: 7,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+
+  Widget _sectionTitle(
+    IconData icon,
+    String title,
+  ) {
+    return Row(
+      children: [
+        Icon(icon, size: 17, color: green),
+        const SizedBox(width: 7),
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.bold,
+            color: green,
           ),
         ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(
-              checked
-                  ? Icons.check_box_rounded
-                  : Icons.check_box_outline_blank_rounded,
-              size: 17,
-              color: checked ? green : muted,
+      ],
+    );
+  }
+
+  Widget _infoRow(
+    IconData icon,
+    String title,
+    String value,
+  ) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 16, color: green),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            title,
+            style: const TextStyle(
+              fontSize: 11,
+              color: muted,
             ),
-            const SizedBox(width: 7),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: ink,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    description,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: muted,
-                    ),
-                  ),
-                ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        Flexible(
+          child: Text(
+            value,
+            textAlign: TextAlign.end,
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: ink,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ERROR
+  Widget _errorView() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(22),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.cloud_off_rounded,
+              size: 42,
+              color: red,
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              'Gagal Memuat Detail Setoran',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: ink,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              errorMessage ?? 'Terjadi kesalahan.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 11,
+                color: muted,
+              ),
+            ),
+            const SizedBox(height: 12),
+            ElevatedButton.icon(
+              onPressed: loadDetail,
+              icon: const Icon(Icons.refresh, size: 16),
+              label: const Text('Coba Lagi'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: green,
+                foregroundColor: Colors.white,
               ),
             ),
           ],
@@ -874,240 +1043,13 @@ class _DetailVerifikasiScreenState
     );
   }
 
-  // KEPUTUSAN AKHIR
-  Widget _decisionCard() {
-    final decisions = [
-      {
-        'title': 'Terlalu Lebih / Salah Timbang',
-        'subtitle': 'Periksa kembali hasil penimbangan sebelum menyetujui.',
-        'status': 'PERIKSA ULANG',
-        'color': orange,
-      },
-      {
-        'title': 'Tolak Setoran / Pelanggaran',
-        'subtitle': 'Setoran ditolak karena tidak sesuai dengan ketentuan.',
-        'status': 'TOLAK',
-        'color': red,
-      },
-      {
-        'title': 'Verifikasi Diterima / Bukan Kecurangan',
-        'subtitle': 'Setoran disetujui dan saldo kelas dapat dicairkan.',
-        'status': 'DISETUJUI',
-        'color': green,
-      },
-    ];
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Putusan Hasil Akhir',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
-              color: ink,
-            ),
-          ),
-          const SizedBox(height: 4),
-          const Text(
-            'Pilih keputusan berdasarkan hasil pemeriksaan.',
-            style: TextStyle(
-              fontSize: 12,
-              color: muted,
-            ),
-          ),
-          const SizedBox(height: 10),
-
-          ...List.generate(decisions.length, (index) {
-            final item = decisions[index];
-            final selected = selectedDecision == index;
-            final color = item['color'] as Color;
-
-            return InkWell(
-              onTap: () {
-                setState(() {
-                  selectedDecision = index;
-                });
-              },
-              borderRadius: BorderRadius.circular(10),
-              child: Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: selected
-                      ? color.withValues(alpha: 0.07)
-                      : Colors.white,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: selected ? color : border,
-                    width: selected ? 1.5 : 1,
-                  ),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(
-                      selected
-                          ? Icons.radio_button_checked
-                          : Icons.radio_button_off,
-                      color: selected ? color : muted,
-                      size: 18,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            item['title'] as String,
-                            style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              color: ink,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            item['subtitle'] as String,
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: muted,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 5),
-                    _pill(
-                      item['status'] as String,
-                      color,
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }),
-        ],
-      ),
-    );
-  }
-
-  // TOMBOL BAWAH
-  Widget _bottomButtons() {
-    return Row(
-      children: [
-        Expanded(
-          child: SizedBox(
-            height: 45,
-            child: ElevatedButton.icon(
-              onPressed: () => konfirmasiKeputusan(false),
-              icon: const Icon(
-                Icons.cancel_outlined,
-                size: 15,
-              ),
-              label: const Text(
-                'Tolak Setoran',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: red,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                padding: const EdgeInsets.symmetric(horizontal: 5),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: SizedBox(
-            height: 45,
-            child: ElevatedButton.icon(
-              onPressed: () {
-                if (selectedDecision == 1) {
-                  konfirmasiKeputusan(false);
-                } else if (selectedDecision == 2) {
-                  konfirmasiKeputusan(true);
-                } else {
-                  showMessage(
-                    'Periksa kembali hasil penimbangan terlebih dahulu.',
-                  );
-                }
-              },
-              icon: const Icon(
-                Icons.verified_rounded,
-                size: 15,
-              ),
-              label: const Text(
-                'Setujui & Cairkan',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: green,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                padding: const EdgeInsets.symmetric(horizontal: 5),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _sectionTitle(IconData icon, String title) {
-    return Row(
-      children: [
-        Icon(icon, size: 15, color: green),
-        const SizedBox(width: 6),
-        Text(
-          title,
-          style: const TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.bold,
-            color: ink,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _pill(String text, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 8,
-        vertical: 4,
-      ),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(20),
-      ),
+  Widget _emptyView() {
+    return const Center(
       child: Text(
-        text,
+        'Data setoran tidak ditemukan.',
         style: TextStyle(
           fontSize: 12,
-          fontWeight: FontWeight.bold,
-          color: color,
+          color: muted,
         ),
       ),
     );

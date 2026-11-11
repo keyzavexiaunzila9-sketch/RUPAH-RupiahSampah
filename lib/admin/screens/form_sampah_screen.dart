@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
+import '../../core/services/sampah_service.dart';
 
 class FormSampahScreen extends StatefulWidget {
   const FormSampahScreen({super.key});
 
   @override
-  State<FormSampahScreen> createState() =>
-      _FormSampahScreenState();
+  State<FormSampahScreen> createState() => _FormSampahScreenState();
 }
 
 class _FormSampahScreenState extends State<FormSampahScreen> {
@@ -17,11 +17,14 @@ class _FormSampahScreenState extends State<FormSampahScreen> {
   static const border = Color(0xFFE8EDF2);
 
   final formKey = GlobalKey<FormState>();
+  final service = SampahService();
+
   final namaController = TextEditingController();
   final hargaController = TextEditingController();
   final deskripsiController = TextEditingController();
 
   String kategori = 'Anorganik';
+  bool sedangMenyimpan = false;
 
   @override
   void dispose() {
@@ -31,17 +34,39 @@ class _FormSampahScreenState extends State<FormSampahScreen> {
     super.dispose();
   }
 
-  void simpanData() {
+  Future<void> simpanData() async {
     if (!formKey.currentState!.validate()) return;
 
-    final dataSampah = {
-      'nama': namaController.text.trim(),
-      'kategori': kategori,
-      'harga': int.parse(hargaController.text),
-      'deskripsi': deskripsiController.text.trim(),
-    };
+    setState(() => sedangMenyimpan = true);
 
-    Navigator.pop(context, dataSampah);
+    try {
+      await service.tambahSampah(
+        nama: namaController.text.trim(),
+        kategori: kategori,
+        harga: double.parse(hargaController.text.trim()),
+        deskripsi: deskripsiController.text.trim(),
+      );
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Data sampah berhasil ditambahkan.'),
+        ),
+      );
+
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal menyimpan data: $e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => sedangMenyimpan = false);
+      }
+    }
   }
 
   @override
@@ -72,10 +97,7 @@ class _FormSampahScreenState extends State<FormSampahScreen> {
             ),
             Text(
               'BANK SAMPAH DIGITAL',
-              style: TextStyle(
-                fontSize: 12,
-                color: muted,
-              ),
+              style: TextStyle(fontSize: 12, color: muted),
             ),
           ],
         ),
@@ -85,7 +107,6 @@ class _FormSampahScreenState extends State<FormSampahScreen> {
         child: ListView(
           padding: const EdgeInsets.all(15),
           children: [
-            // INFORMASI
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
@@ -134,7 +155,6 @@ class _FormSampahScreenState extends State<FormSampahScreen> {
 
             const SizedBox(height: 18),
 
-            // NAMA SAMPAH
             _label('Nama Sampah'),
             TextFormField(
               controller: namaController,
@@ -153,14 +173,10 @@ class _FormSampahScreenState extends State<FormSampahScreen> {
 
             const SizedBox(height: 15),
 
-            // KATEGORI
             _label('Kategori Sampah'),
             DropdownButtonFormField<String>(
               value: kategori,
-              style: const TextStyle(
-                fontSize: 12,
-                color: ink,
-              ),
+              style: const TextStyle(fontSize: 12, color: ink),
               decoration: _decoration(
                 'Pilih kategori',
                 Icons.category_outlined,
@@ -188,7 +204,6 @@ class _FormSampahScreenState extends State<FormSampahScreen> {
 
             const SizedBox(height: 15),
 
-            // HARGA
             _label('Harga Sampah per Kg'),
             TextFormField(
               controller: hargaController,
@@ -200,17 +215,18 @@ class _FormSampahScreenState extends State<FormSampahScreen> {
                 prefix: 'Rp ',
               ),
               validator: (value) {
-                final harga = int.tryParse(value ?? '');
+                final harga = double.tryParse(value?.trim() ?? '');
+
                 if (harga == null || harga <= 0) {
                   return 'Masukkan harga yang valid.';
                 }
+
                 return null;
               },
             ),
 
             const SizedBox(height: 15),
 
-            // DESKRIPSI
             _label('Deskripsi Sampah'),
             TextFormField(
               controller: deskripsiController,
@@ -230,18 +246,25 @@ class _FormSampahScreenState extends State<FormSampahScreen> {
 
             const SizedBox(height: 22),
 
-            // TOMBOL SIMPAN
             SizedBox(
               height: 46,
               child: ElevatedButton.icon(
-                onPressed: simpanData,
-                icon: const Icon(
-                  Icons.save_rounded,
-                  size: 17,
-                ),
-                label: const Text(
-                  'Simpan Data Sampah',
-                  style: TextStyle(
+                onPressed: sedangMenyimpan ? null : simpanData,
+                icon: sedangMenyimpan
+                    ? const SizedBox(
+                        width: 17,
+                        height: 17,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.save_rounded, size: 17),
+                label: Text(
+                  sedangMenyimpan
+                      ? 'Menyimpan...'
+                      : 'Simpan Data Sampah',
+                  style: const TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
                   ),
@@ -329,7 +352,10 @@ class _FormSampahScreenState extends State<FormSampahScreen> {
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(11),
-        borderSide: const BorderSide(color: green, width: 1.3),
+        borderSide: const BorderSide(
+          color: green,
+          width: 1.3,
+        ),
       ),
     );
   }

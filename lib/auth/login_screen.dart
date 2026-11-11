@@ -1,8 +1,14 @@
 
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:http/http.dart' as http;
+
 import '../core/theme/app_theme.dart';
 import '../user/user_navigation.dart';
+import '../admin/widgets/admin_navigation.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -16,6 +22,10 @@ class _LoginScreenState extends State<LoginScreen> {
   final passwordController = TextEditingController();
 
   bool obscure = true;
+  bool isLoading = false;
+
+  // URL backend RUPAH
+  final String baseUrl = 'http://localhost:3000';
 
   @override
   void dispose() {
@@ -24,10 +34,11 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  // LOGIN
-  void _login() {
-    if (usernameController.text.trim().isEmpty ||
-        passwordController.text.isEmpty) {
+  Future<void> _login() async {
+    final username = usernameController.text.trim().toLowerCase();
+    final password = passwordController.text;
+
+    if (username.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Username dan password wajib diisi.'),
@@ -36,13 +47,117 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
-    // MASUK KE NAVIGASI USER
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (context) => const UserNavigation(),
-      ),
-    );
+    setState(() {
+      isLoading = true;
+    });
+
+    try {
+      // 1. Mencari email berdasarkan username melalui backend
+      final lookupResponse = await http.post(
+        Uri.parse('$baseUrl/api/auth/username-email'),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'username': username,
+        }),
+      );
+
+      final lookupData = jsonDecode(lookupResponse.body);
+
+      if (lookupResponse.statusCode != 200) {
+        throw Exception(
+          lookupData['message'] ?? 'Username tidak ditemukan.',
+        );
+      }
+
+      final email = lookupData['email'];
+
+      if (email == null || email.toString().isEmpty) {
+        throw Exception('Email akun tidak ditemukan.');
+      }
+
+      // 2. Login ke Supabase Auth
+      final supabase = Supabase.instance.client;
+
+      final response = await supabase.auth.signInWithPassword(
+        email: email.toString(),
+        password: password,
+      );
+
+      final user = response.user;
+
+      if (user == null) {
+        throw Exception('Akun tidak ditemukan.');
+      }
+
+      // 3. Mengambil data role pengguna
+      final data = await supabase
+          .from('users')
+          .select('username, role, id_kelas')
+          .eq('id_user', user.id)
+          .maybeSingle();
+
+      if (data == null) {
+        await supabase.auth.signOut();
+        throw Exception('Data pengguna tidak ditemukan.');
+      }
+
+      if (!mounted) return;
+
+      // 4. Mengarahkan pengguna berdasarkan role
+      final role = data['role'];
+
+      if (role == 'admin') {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const AdminNavigation(),
+          ),
+        );
+      } else if (role == 'user') {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const UserNavigation(),
+          ),
+        );
+      } else {
+        await supabase.auth.signOut();
+
+        if (!mounted) return;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Role pengguna tidak valid.'),
+          ),
+        );
+      }
+    } on AuthException catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Login gagal: ${e.message}'),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Login gagal: ${e.toString().replaceFirst('Exception: ', '')}',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+        });
+      }
+    }
   }
 
   @override
@@ -50,7 +165,7 @@ class _LoginScreenState extends State<LoginScreen> {
     return Scaffold(
       body: Stack(
         children: [
-          // BACKGROUND
+          // Background gradient
           Container(
             decoration: const BoxDecoration(
               gradient: LinearGradient(
@@ -64,7 +179,7 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ),
 
-          // LINGKARAN ATAS
+          // Lingkaran dekorasi atas
           Positioned(
             top: -90,
             left: -70,
@@ -78,7 +193,7 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ),
 
-          // LINGKARAN BAWAH
+          // Lingkaran dekorasi bawah
           Positioned(
             bottom: -100,
             right: -70,
@@ -92,7 +207,6 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ),
 
-          // CONTENT
           SafeArea(
             child: Center(
               child: SingleChildScrollView(
@@ -109,7 +223,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     children: [
                       const SizedBox(height: 70),
 
-                      // SELAMAT DATANG
                       Text(
                         'Selamat Datang 👋',
                         style: GoogleFonts.dmSans(
@@ -121,7 +234,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
                       const SizedBox(height: 4),
 
-                      // JUDUL LOGIN
                       Text(
                         'Login',
                         style: GoogleFonts.poppins(
@@ -133,7 +245,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                       const SizedBox(height: 24),
 
-                      // USERNAME
+                      // Username
                       _field(
                         'Username',
                         usernameController,
@@ -141,7 +253,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                       const SizedBox(height: 14),
 
-                      // PASSWORD
+                      // Password
                       _field(
                         'Password',
                         passwordController,
@@ -150,39 +262,47 @@ class _LoginScreenState extends State<LoginScreen> {
 
                       const SizedBox(height: 24),
 
-                      // BUTTON LOGIN
+                      // Tombol login
                       SizedBox(
                         height: 52,
                         child: FilledButton(
-                          onPressed: _login,
+                          onPressed: isLoading ? null : _login,
                           style: FilledButton.styleFrom(
                             backgroundColor: RupahColors.green,
                             foregroundColor: RupahColors.white,
+                            disabledBackgroundColor:
+                                RupahColors.green.withValues(alpha: 0.7),
                             elevation: 0,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(8),
                             ),
                           ),
-                          child: Text(
-                            'Login',
-                            style: GoogleFonts.dmSans(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                              color: RupahColors.white,
-                            ),
-                          ),
+                          child: isLoading
+                              ? const SizedBox(
+                                  width: 22,
+                                  height: 22,
+                                  child: CircularProgressIndicator(
+                                    color: Colors.white,
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : Text(
+                                  'Login',
+                                  style: GoogleFonts.dmSans(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
                         ),
                       ),
 
                       const SizedBox(height: 18),
 
-                      // KETERANGAN
                       Text(
                         'Aplikasi pengelolaan sampah kelas dan sekolah',
                         textAlign: TextAlign.center,
                         style: GoogleFonts.dmSans(
                           fontSize: 11,
-                          fontWeight: FontWeight.w400,
                           color: Colors.white.withValues(alpha: 0.82),
                         ),
                       ),
@@ -197,7 +317,6 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // FIELD USERNAME DAN PASSWORD
   Widget _field(
     String label,
     TextEditingController controller, {
@@ -219,16 +338,17 @@ class _LoginScreenState extends State<LoginScreen> {
       child: TextField(
         controller: controller,
         obscureText: password && obscure,
+        keyboardType: password
+            ? TextInputType.visiblePassword
+            : TextInputType.text,
         style: GoogleFonts.dmSans(
           fontSize: 13,
-          fontWeight: FontWeight.w400,
           color: Colors.black87,
         ),
         decoration: InputDecoration(
           hintText: label,
           hintStyle: GoogleFonts.dmSans(
             fontSize: 12,
-            fontWeight: FontWeight.w400,
             color: const Color(0xFF999999),
           ),
           filled: true,

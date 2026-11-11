@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_application_1/core/config/supabase_config.dart';
-import 'package:flutter_application_1/core/widget/admin_navigation.dart';
+import 'package:flutter_application_1/auth/splash_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -17,7 +17,7 @@ class RupahApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return const MaterialApp(
       debugShowCheckedModeBanner: false,
-      home: AdminNavigation(),
+      home: SplashScreen(),
     );
   }
 }

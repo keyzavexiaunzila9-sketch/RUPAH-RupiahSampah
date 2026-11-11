@@ -1,58 +1,143 @@
 
 import 'package:flutter/material.dart';
+import '../../core/services/kelas_service.dart';
 import '../widgets/admin_widgets.dart';
 import 'edit_kelas_screen.dart';
 import 'form_kelas_screen.dart';
 
-class _Kelas {
-  final String nama, wali, username, saldo, total;
-  final IconData icon;
+class DataKelasScreen extends StatefulWidget {
+  const DataKelasScreen({super.key});
 
-  const _Kelas(
-    this.nama,
-    this.wali,
-    this.username,
-    this.saldo,
-    this.total,
-    this.icon,
-  );
+  @override
+  State<DataKelasScreen> createState() => _DataKelasScreenState();
 }
 
-const _data = [
-  _Kelas(
-    'XI RPL 1',
-    'Ibu Rina S.Pd',
-    '@eko_xirpl1',
-    'Rp 127.500',
-    '42.5 Kg',
-    Icons.laptop_mac,
-  ),
-  _Kelas(
-    'XI TKJ D',
-    'Drs. Bambang Sudiro',
-    '@eko_xiimipa1',
-    'Rp 185.000',
-    '58.2 Kg',
-    Icons.science_outlined,
-  ),
-  _Kelas(
-    'XII TKJ C',
-    'Siti Rahmawati M.Pd',
-    '@eko_xmipa2',
-    'Rp 114.000',
-    '38.0 Kg',
-    Icons.biotech_outlined,
-  ),
-];
+class _DataKelasScreenState extends State<DataKelasScreen> {
+  final KelasService service = KelasService();
+  final TextEditingController searchController = TextEditingController();
 
-class DataKelasScreen extends StatelessWidget {
-  const DataKelasScreen({super.key});
+  List<Map<String, dynamic>> dataKelas = [];
+  bool loading = true;
+  String kataKunci = '';
+
+  @override
+  void initState() {
+    super.initState();
+    ambilData();
+  }
+
+  @override
+  void dispose() {
+    searchController.dispose();
+    super.dispose();
+  }
+
+  // Filter pencarian kelas.
+  List<Map<String, dynamic>> get kelasTersaring {
+    if (kataKunci.isEmpty) return dataKelas;
+
+    return dataKelas.where((kelas) {
+      final nama = kelas['nama_kelas']?.toString().toLowerCase() ?? '';
+      final jurusan = kelas['jurusan']?.toString().toLowerCase() ?? '';
+      final wali = kelas['nama_wali_kelas']?.toString().toLowerCase() ?? '';
+      final username = kelas['username']?.toString().toLowerCase() ?? '';
+
+      return nama.contains(kataKunci) ||
+          jurusan.contains(kataKunci) ||
+          wali.contains(kataKunci) ||
+          username.contains(kataKunci);
+    }).toList();
+  }
+
+  // Mengambil data kelas dari Supabase.
+  Future<void> ambilData() async {
+    if (mounted) {
+      setState(() => loading = true);
+    }
+
+    try {
+      final data = await service.getKelas();
+
+      if (!mounted) return;
+
+      setState(() {
+        dataKelas = data;
+        loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() => loading = false);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Gagal mengambil data kelas: $e'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  // Menghapus kelas.
+  Future<void> hapusKelas(int idKelas) async {
+    try {
+      await service.hapusKelas(idKelas);
+      await ambilData();
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Data kelas berhasil dihapus.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Gagal menghapus kelas: $e'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  // Membuka form tambah kelas.
+  Future<void> tambahKelas() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const FormKelasScreen(),
+      ),
+    );
+
+    if (mounted) await ambilData();
+  }
+
+  // Membuka form edit kelas.
+  Future<void> editKelas(Map<String, dynamic> kelas) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => EditKelasScreen(
+          idKelas: (kelas['id_kelas'] as num).toInt(),
+          namaKelas: kelas['nama_kelas']?.toString() ?? '',
+          jurusan: kelas['jurusan']?.toString() ?? '',
+          namaWaliKelas: kelas['nama_wali_kelas']?.toString() ?? '',
+        ),
+      ),
+    );
+
+    if (mounted) await ambilData();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        // HEADER DENGAN LOGO RUPAH
+        // HEADER
         Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(
@@ -62,9 +147,7 @@ class DataKelasScreen extends StatelessWidget {
           decoration: const BoxDecoration(
             color: Colors.white,
             border: Border(
-              bottom: BorderSide(
-                color: AdminColors.border,
-              ),
+              bottom: BorderSide(color: AdminColors.border),
             ),
           ),
           child: Row(
@@ -82,7 +165,6 @@ class DataKelasScreen extends StatelessWidget {
                   );
                 },
               ),
-
               const SizedBox(width: 12),
 
               const Expanded(
@@ -100,7 +182,7 @@ class DataKelasScreen extends StatelessWidget {
                     ),
                     SizedBox(height: 4),
                     Text(
-                      'Master Akun & Kredensial • 32 Kelas',
+                      'Data Kelas',
                       style: TextStyle(
                         fontSize: 10,
                         color: AdminColors.muted,
@@ -114,14 +196,7 @@ class DataKelasScreen extends StatelessWidget {
                 width: 105,
                 height: 44,
                 child: ElevatedButton.icon(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const FormKelasScreen(),
-                      ),
-                    );
-                  },
+                  onPressed: tambahKelas,
                   icon: const Icon(
                     Icons.add_circle_outline,
                     size: 17,
@@ -149,31 +224,134 @@ class DataKelasScreen extends StatelessWidget {
           ),
         ),
 
-        // DAFTAR DATA KELAS
+        // DAFTAR KELAS
         Expanded(
-          child: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              const AdminSearch(),
-              for (final k in _data) _KelasCard(k),
-            ],
-          ),
+          child: loading
+              ? const Center(
+                  child: CircularProgressIndicator(),
+                )
+              : RefreshIndicator(
+                  onRefresh: ambilData,
+                  child: ListView(
+                    padding: const EdgeInsets.all(16),
+                    children: [
+                      TextField(
+                        controller: searchController,
+                        onChanged: (value) {
+                          setState(() {
+                            kataKunci = value.toLowerCase().trim();
+                          });
+                        },
+                        decoration: InputDecoration(
+                          hintText: 'Cari kelas, jurusan, wali, username...',
+                          prefixIcon: const Icon(
+                            Icons.search,
+                            color: AdminColors.muted,
+                          ),
+                          suffixIcon: kataKunci.isNotEmpty
+                              ? IconButton(
+                                  onPressed: () {
+                                    searchController.clear();
+                                    setState(() => kataKunci = '');
+                                  },
+                                  icon: const Icon(Icons.close),
+                                )
+                              : null,
+                          filled: true,
+                          fillColor: Colors.white,
+                          contentPadding: const EdgeInsets.symmetric(
+                            vertical: 12,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(
+                              color: AdminColors.border,
+                            ),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(
+                              color: AdminColors.border,
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      if (dataKelas.isEmpty)
+                        const Padding(
+                          padding: EdgeInsets.all(30),
+                          child: Center(
+                            child: Text('Belum ada data kelas.'),
+                          ),
+                        )
+                      else if (kelasTersaring.isEmpty)
+                        const Padding(
+                          padding: EdgeInsets.all(30),
+                          child: Center(
+                            child: Text('Kelas tidak ditemukan.'),
+                          ),
+                        )
+                      else ...[
+                        Text(
+                          '${kelasTersaring.length} Data Kelas',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: AdminColors.muted,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+
+                        for (final kelas in kelasTersaring)
+                          _KelasCard(
+                            kelas: kelas,
+                            onEdit: () => editKelas(kelas),
+                            onDelete: hapusKelas,
+                          ),
+                      ],
+                    ],
+                  ),
+                ),
         ),
       ],
     );
   }
 }
 
+// KARTU DATA KELAS
 class _KelasCard extends StatelessWidget {
-  final _Kelas k;
+  final Map<String, dynamic> kelas;
+  final VoidCallback onEdit;
+  final Future<void> Function(int idKelas) onDelete;
 
-  const _KelasCard(this.k);
+  const _KelasCard({
+    required this.kelas,
+    required this.onEdit,
+    required this.onDelete,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final int idKelas = (kelas['id_kelas'] as num).toInt();
+
+    final String namaKelas =
+        kelas['nama_kelas']?.toString() ?? '-';
+
+    final String status =
+        kelas['status']?.toString() ?? 'aktif';
+
+    final String username =
+        kelas['username']?.toString() ?? '-';
+
+    final bool aktif = status.toLowerCase() == 'aktif';
+
     return AdminCard(
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // NAMA KELAS DAN STATUS
           Row(
             children: [
               Container(
@@ -182,17 +360,16 @@ class _KelasCard extends StatelessWidget {
                   color: AdminColors.primaryLight,
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(
-                  k.icon,
+                child: const Icon(
+                  Icons.school_outlined,
                   color: AdminColors.primary,
                 ),
               ),
-
               const SizedBox(width: 12),
 
               Expanded(
                 child: Text(
-                  k.nama,
+                  namaKelas,
                   style: const TextStyle(
                     fontSize: 17,
                     fontWeight: FontWeight.w700,
@@ -200,11 +377,17 @@ class _KelasCard extends StatelessWidget {
                 ),
               ),
 
-              const AdminPill(
-                'Akun Aktif',
-                bg: AdminColors.primaryLight,
-                fg: AdminColors.primary,
-                icon: Icons.check_circle_outline,
+              AdminPill(
+                aktif ? 'Aktif' : 'Nonaktif',
+                bg: aktif
+                    ? AdminColors.primaryLight
+                    : AdminColors.dangerBg,
+                fg: aktif
+                    ? AdminColors.primary
+                    : AdminColors.danger,
+                icon: aktif
+                    ? Icons.check_circle_outline
+                    : Icons.cancel_outlined,
                 size: 10,
               ),
             ],
@@ -212,148 +395,48 @@ class _KelasCard extends StatelessWidget {
 
           const SizedBox(height: 12),
 
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: AdminColors.blueSoft,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.person_outline,
-                  size: 16,
-                ),
-                const SizedBox(width: 6),
-                const Text(
-                  'Wali Kelas:',
-                  style: TextStyle(fontSize: 11),
-                ),
-                const Spacer(),
-                Flexible(
-                  child: Text(
-                    k.wali,
-                    textAlign: TextAlign.end,
-                    style: const TextStyle(fontSize: 11),
-                  ),
-                ),
-              ],
-            ),
+          // JURUSAN
+          _InfoKelas(
+            icon: Icons.computer_outlined,
+            label: 'Jurusan',
+            value: kelas['jurusan']?.toString() ?? '-',
+            background: AdminColors.bg,
           ),
 
           const SizedBox(height: 10),
 
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: AdminColors.bg,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: AdminColors.border,
-              ),
-            ),
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.account_circle_outlined,
-                  size: 18,
-                  color: AdminColors.muted,
-                ),
+          // WALI KELAS
+          _InfoKelas(
+            icon: Icons.person_outline,
+            label: 'Wali Kelas',
+            value: kelas['nama_wali_kelas']?.toString() ?? '-',
+            background: AdminColors.bg,
+          ),
 
-                const SizedBox(width: 8),
+          const SizedBox(height: 10),
 
-                Expanded(
-                  child: Text(
-                    '${k.username} • ••••••••',
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: AdminColors.primary,
-                    ),
-                  ),
-                ),
-
-                const Icon(
-                  Icons.copy,
-                  size: 16,
-                  color: AdminColors.muted,
-                ),
-
-                const SizedBox(width: 10),
-
-                const Icon(
-                  Icons.lock_reset,
-                  size: 18,
-                  color: AdminColors.muted,
-                ),
-              ],
-            ),
+          // USERNAME
+          _InfoKelas(
+            icon: Icons.account_circle_outlined,
+            label: 'Username',
+            value: username,
+            background: AdminColors.blueSoft,
           ),
 
           const Divider(height: 22),
 
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  children: [
-                    const Text(
-                      'Saldo Kas',
-                      style: TextStyle(fontSize: 10),
-                    ),
-                    Text(
-                      k.saldo,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: AdminColors.primary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              Expanded(
-                child: Column(
-                  children: [
-                    const Text(
-                      'Total Setor',
-                      style: TextStyle(fontSize: 10),
-                    ),
-                    Text(
-                      k.total,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-
-          const Divider(height: 22),
-
+          // TOMBOL AKSI
           Row(
             children: [
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const EditKelasScreen(),
-                      ),
-                    );
-                  },
+                  onPressed: onEdit,
                   icon: const Icon(
                     Icons.edit_outlined,
                     size: 16,
                   ),
                   label: const Text(
-                    'Edit Data dan Akun',
+                    'Edit Data',
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
@@ -374,19 +457,105 @@ class _KelasCard extends StatelessWidget {
 
               const SizedBox(width: 10),
 
-              Container(
-                width: 44,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: AdminColors.dangerBg,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(
-                  Icons.delete_outline,
-                  color: AdminColors.danger,
+              InkWell(
+                onTap: () async {
+                  final konfirmasi = await showDialog<bool>(
+                    context: context,
+                    builder: (dialogContext) => AlertDialog(
+                      title: const Text('Hapus Kelas'),
+                      content: Text('Hapus kelas $namaKelas?'),
+                      actions: [
+                        TextButton(
+                          onPressed: () {
+                            Navigator.pop(dialogContext, false);
+                          },
+                          child: const Text('Batal'),
+                        ),
+                        TextButton(
+                          onPressed: () {
+                            Navigator.pop(dialogContext, true);
+                          },
+                          child: const Text('Hapus'),
+                        ),
+                      ],
+                    ),
+                  );
+
+                  if (konfirmasi == true) {
+                    await onDelete(idKelas);
+                  }
+                },
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  width: 44,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: AdminColors.dangerBg,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.delete_outline,
+                    color: AdminColors.danger,
+                  ),
                 ),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// WIDGET INFORMASI KELAS
+class _InfoKelas extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color background;
+
+  const _InfoKelas({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.background,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AdminColors.border),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            icon,
+            size: 17,
+            color: AdminColors.muted,
+          ),
+          const SizedBox(width: 8),
+
+          Text(
+            '$label:',
+            style: const TextStyle(fontSize: 11),
+          ),
+
+          const Spacer(),
+
+          Flexible(
+            child: Text(
+              value,
+              textAlign: TextAlign.end,
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: AdminColors.primary,
+              ),
+            ),
           ),
         ],
       ),

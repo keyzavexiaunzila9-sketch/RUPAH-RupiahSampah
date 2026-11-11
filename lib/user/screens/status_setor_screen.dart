@@ -1,11 +1,14 @@
+
 import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
+
 import '../../core/theme/app_theme.dart';
 import '../../core/widget/rupah_widgets.dart';
 import 'detail_setoran_screen.dart';
-import 'dashboard_screens.dart';
 
 class StatusSetorScreen extends StatelessWidget {
+  final int idSetoran;
   final String category;
   final double weight;
   final String note;
@@ -13,27 +16,44 @@ class StatusSetorScreen extends StatelessWidget {
 
   const StatusSetorScreen({
     super.key,
-    this.category = 'Plastik',
-    this.weight = 5,
+    required this.idSetoran,
+    required this.category,
+    required this.weight,
     this.note = '',
     this.photoBytes,
   });
 
+  // Kembali ke halaman utama UserNavigation.
+  void _kembaliKeDashboard(BuildContext context) {
+    Navigator.popUntil(
+      context,
+      (route) => route.isFirst,
+    );
+  }
+
+  // Membuka detail setoran berdasarkan ID database.
+  void _bukaDetail(BuildContext context) {
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => DetailSetoranScreen(
+        idSetoran: idSetoran,
+      ),
+    ),
+  );
+}
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: RupahColors.background,
       appBar: AppBar(
+        backgroundColor: RupahColors.white,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.close_rounded),
-          onPressed: () {
-            Navigator.pushAndRemoveUntil(
-              context,
-              MaterialPageRoute(
-                builder: (_) => const DashboardScreens(),
-              ),
-              (_) => false,
-            );
-          },
+          onPressed: () => _kembaliKeDashboard(context),
         ),
         title: Text(
           'Status Setoran',
@@ -49,15 +69,21 @@ class StatusSetorScreen extends StatelessWidget {
           ),
         ],
       ),
+
       body: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(18, 8, 18, 28),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // =====================================
+            // STATUS BERHASIL
+            // =====================================
+
             Center(
               child: Column(
                 children: [
                   const SizedBox(height: 12),
+
                   Container(
                     width: 74,
                     height: 74,
@@ -71,7 +97,9 @@ class StatusSetorScreen extends StatelessWidget {
                       color: RupahColors.green,
                     ),
                   ),
+
                   const SizedBox(height: 14),
+
                   Text(
                     'Setoran Berhasil Dikirim!',
                     textAlign: TextAlign.center,
@@ -80,23 +108,30 @@ class StatusSetorScreen extends StatelessWidget {
                       color: RupahColors.green,
                     ),
                   ),
+
                   const SizedBox(height: 8),
+
                   Text(
-                    'Setoranmu sudah dikirim dan menunggu verifikasi admin.',
+                    'Setoranmu sudah dikirim dan menunggu '
+                    'verifikasi admin.',
                     textAlign: TextAlign.center,
                     style: RupahTheme.body(
                       size: 12,
                       color: RupahColors.muted,
                     ),
                   ),
+
                   const SizedBox(height: 14),
+
                   const StatusPill(
                     text: 'Menunggu Verifikasi Admin',
                     color: RupahColors.warning,
                     background: Color(0xFFFFF2D9),
                     icon: Icons.hourglass_top_rounded,
                   ),
+
                   const SizedBox(height: 6),
+
                   Text(
                     'Estimasi verifikasi maksimal 24 jam kerja',
                     textAlign: TextAlign.center,
@@ -111,14 +146,19 @@ class StatusSetorScreen extends StatelessWidget {
 
             const SizedBox(height: 22),
 
-            // Ringkasan Setoran
+            // =====================================
+            // RINGKASAN SETORAN
+            // =====================================
+
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: RupahColors.white,
                 borderRadius: BorderRadius.circular(17),
-                border: Border.all(color: RupahColors.border),
+                border: Border.all(
+                  color: RupahColors.border,
+                ),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -127,18 +167,36 @@ class StatusSetorScreen extends StatelessWidget {
                     'Ringkasan Setoran',
                     style: RupahTheme.heading(size: 14),
                   ),
+
                   const SizedBox(height: 14),
-                  _detailRow('Kategori Sampah', category),
+
+                  _detailRow(
+                    'Nomor Transaksi',
+                    '#RPH-$idSetoran',
+                  ),
+
+                  _detailRow(
+                    'Kategori Sampah',
+                    category,
+                  ),
+
                   _detailRow(
                     'Berat Sampah',
-                    '${weight.toStringAsFixed(weight % 1 == 0 ? 0 : 1)} Kg',
+                    '${weight.toStringAsFixed(
+                      weight % 1 == 0 ? 0 : 1,
+                    )} Kg',
                   ),
-                  if (note.trim().isNotEmpty)
-                    _detailRow('Catatan', note.trim()),
 
-                  // Foto bukti setoran
+                  if (note.trim().isNotEmpty)
+                    _detailRow(
+                      'Catatan',
+                      note.trim(),
+                    ),
+
+                  // Foto bukti setoran.
                   if (photoBytes != null) ...[
                     const SizedBox(height: 14),
+
                     Text(
                       'Foto Bukti Timbangan',
                       style: RupahTheme.body(
@@ -146,7 +204,9 @@ class StatusSetorScreen extends StatelessWidget {
                         weight: FontWeight.w700,
                       ),
                     ),
+
                     const SizedBox(height: 8),
+
                     ClipRRect(
                       borderRadius: BorderRadius.circular(12),
                       child: Image.memory(
@@ -163,14 +223,19 @@ class StatusSetorScreen extends StatelessWidget {
 
             const SizedBox(height: 18),
 
-            // Proses Verifikasi
+            // =====================================
+            // PROSES VERIFIKASI
+            // =====================================
+
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: RupahColors.white,
                 borderRadius: BorderRadius.circular(17),
-                border: Border.all(color: RupahColors.border),
+                border: Border.all(
+                  color: RupahColors.border,
+                ),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -179,7 +244,9 @@ class StatusSetorScreen extends StatelessWidget {
                     'Proses Verifikasi Setoran',
                     style: RupahTheme.heading(size: 14),
                   ),
+
                   const SizedBox(height: 13),
+
                   _timeline(
                     'Setoran Dikirim',
                     'Data setoran sudah dikirim dari formulir.',
@@ -187,6 +254,7 @@ class StatusSetorScreen extends StatelessWidget {
                     'Selesai',
                     RupahColors.green,
                   ),
+
                   _timeline(
                     'Pemeriksaan Fisik & Validasi',
                     'Admin akan memeriksa data dan bukti setoran.',
@@ -194,6 +262,7 @@ class StatusSetorScreen extends StatelessWidget {
                     'Menunggu',
                     RupahColors.warning,
                   ),
+
                   _timeline(
                     'Pencairan Saldo Kelas',
                     'Saldo masuk setelah setoran disetujui admin.',
@@ -207,47 +276,37 @@ class StatusSetorScreen extends StatelessWidget {
 
             const SizedBox(height: 18),
 
-            // Tombol Detail
+            // =====================================
+            // TOMBOL DETAIL SETORAN
+            // =====================================
+
             RupahPrimaryButton(
               label: 'Lihat Detail Setoran',
               icon: Icons.arrow_forward_rounded,
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => DetailSetoranScreen(
-                      category: category,
-                      weight: weight,
-                      note: note,
-                      photoBytes: photoBytes,
-                    ),
-                  ),
-                );
-              },
+              onPressed: () => _bukaDetail(context),
             ),
 
             const SizedBox(height: 9),
 
-            // Tombol Dashboard
+            // =====================================
+            // TOMBOL KEMBALI DASHBOARD
+            // =====================================
+
             RupahPrimaryButton(
               label: 'Kembali ke Dashboard',
               icon: Icons.home_outlined,
               outlined: true,
-              onPressed: () {
-                Navigator.pushAndRemoveUntil(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const DashboardScreens(),
-                  ),
-                  (_) => false,
-                );
-              },
+              onPressed: () => _kembaliKeDashboard(context),
             ),
           ],
         ),
       ),
     );
   }
+
+  // =====================================
+  // BARIS INFORMASI
+  // =====================================
 
   Widget _detailRow(String title, String value) {
     return Padding(
@@ -265,7 +324,9 @@ class StatusSetorScreen extends StatelessWidget {
               ),
             ),
           ),
+
           const SizedBox(width: 8),
+
           Expanded(
             flex: 5,
             child: Text(
@@ -281,6 +342,10 @@ class StatusSetorScreen extends StatelessWidget {
       ),
     );
   }
+
+  // =====================================
+  // TIMELINE VERIFIKASI
+  // =====================================
 
   Widget _timeline(
     String title,
@@ -310,6 +375,7 @@ class StatusSetorScreen extends StatelessWidget {
                   color: done ? Colors.white : color,
                 ),
               ),
+
               Expanded(
                 child: Container(
                   width: 2,
@@ -318,7 +384,9 @@ class StatusSetorScreen extends StatelessWidget {
               ),
             ],
           ),
+
           const SizedBox(width: 12),
+
           Expanded(
             child: Padding(
               padding: const EdgeInsets.only(bottom: 15),
@@ -336,6 +404,7 @@ class StatusSetorScreen extends StatelessWidget {
                           ),
                         ),
                       ),
+
                       Text(
                         meta,
                         style: RupahTheme.body(
@@ -346,7 +415,9 @@ class StatusSetorScreen extends StatelessWidget {
                       ),
                     ],
                   ),
+
                   const SizedBox(height: 4),
+
                   Text(
                     subtitle,
                     style: RupahTheme.body(

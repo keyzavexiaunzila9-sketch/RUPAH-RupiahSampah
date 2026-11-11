@@ -1,26 +1,33 @@
-import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../../core/theme/app_theme.dart';
 
-class DetailSetoranScreen extends StatelessWidget {
-  final String category;
-  final double weight;
-  final String note;
-  final Uint8List? photoBytes;
-  final DateTime? date;
-  final String status;
-  final String? nomorSetoran;
+class DetailSetoranScreen extends StatefulWidget {
+  final int idSetoran;
 
   const DetailSetoranScreen({
     super.key,
-    this.category = 'Plastik',
-    this.weight = 5,
-    this.note = 'Telah dicuci bersih dan dipadatkan sesuai panduan RUPAH.',
-    this.photoBytes,
-    this.date,
-    this.status = 'Diterima',
-    this.nomorSetoran,
+    required this.idSetoran,
   });
+
+  @override
+  State<DetailSetoranScreen> createState() =>
+      _DetailSetoranScreenState();
+}
+
+class _DetailSetoranScreenState extends State<DetailSetoranScreen> {
+  final supabase = Supabase.instance.client;
+
+  bool sedangMemuat = true;
+  String? pesanError;
+
+  Map<String, dynamic>? dataSetoran;
+  List<Map<String, dynamic>> daftarDetail = [];
+
+  String namaKelas = 'Kelas belum terdaftar';
+  String? fotoUrl;
 
   static const bg = Color(0xFFF6F8FD);
   static const green = Color(0xFF16805D);
@@ -30,39 +37,240 @@ class DetailSetoranScreen extends StatelessWidget {
   static const border = Color(0xFFE8EDF4);
 
   @override
+  void initState() {
+    super.initState();
+    muatDetailSetoran();
+  }
+
+  // ==========================================
+  // MEMUAT DATA SETORAN
+  // ==========================================
+
+  Future<void> muatDetailSetoran() async {
+    if (!mounted) return;
+
+    setState(() {
+      sedangMemuat = true;
+      pesanError = null;
+    });
+
+    try {
+      // 1. Mengambil data utama setoran.
+      final responseSetoran = await supabase
+          .from('setoran')
+          .select(
+            'id_setoran, id_user, tanggal, status, '
+            'total_berat, total_nilai, catatan, foto_url',
+          )
+          .eq('id_setoran', widget.idSetoran)
+          .single();
+
+      final setoran =
+          Map<String, dynamic>.from(responseSetoran);
+
+      // 2. Mengambil detail setoran.
+      final responseDetail = await supabase
+          .from('detail_setoran')
+          .select('id_detail, id_setoran, id_sampah, berat_kg')
+          .eq('id_setoran', widget.idSetoran);
+
+      final hasilDetail =
+          List<Map<String, dynamic>>.from(responseDetail);
+
+      // 3. Mengambil informasi masing-masing sampah.
+      for (final item in hasilDetail) {
+        final responseSampah = await supabase
+            .from('sampah')
+            .select(
+              'nama_sampah, kategori, harga_per_kg, satuan',
+            )
+            .eq('id_sampah', item['id_sampah'])
+            .maybeSingle();
+
+        item['sampah'] = responseSampah == null
+            ? null
+            : Map<String, dynamic>.from(responseSampah);
+      }
+
+      // 4. Mengambil informasi kelas penyetor.
+      final responseUser = await supabase
+          .from('users')
+          .select('id_kelas')
+          .eq('id_user', setoran['id_user'])
+          .maybeSingle();
+
+      String kelas = 'Kelas belum terdaftar';
+
+      if (responseUser != null &&
+          responseUser['id_kelas'] != null) {
+        final responseKelas = await supabase
+            .from('kelas')
+            .select('nama_kelas')
+            .eq('id_kelas', responseUser['id_kelas'])
+            .maybeSingle();
+
+        kelas = responseKelas?['nama_kelas'] ?? kelas;
+      }
+
+      // 5. Mengambil signed URL foto.
+      String? signedFoto;
+
+      final pathFoto = setoran['foto_url']?.toString();
+
+      if (pathFoto != null && pathFoto.isNotEmpty) {
+        try {
+          signedFoto = await supabase.storage
+              .from('bukti-setoran')
+              .createSignedUrl(pathFoto, 3600);
+        } catch (_) {
+          // Foto gagal dimuat, tetapi detail transaksi tetap ditampilkan.
+          signedFoto = null;
+        }
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        dataSetoran = setoran;
+        daftarDetail = hasilDetail;
+        namaKelas = kelas;
+        fotoUrl = signedFoto;
+        sedangMemuat = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        sedangMemuat = false;
+        pesanError = e.toString();
+      });
+    }
+  }
+
+  // ==========================================
+  // FORMAT DATA
+  // ==========================================
+
+  String rupiah(dynamic value) {
+    final angka = value is num ? value.round() : 0;
+
+    return angka.toString().replaceAllMapped(
+      RegExp(r'\B(?=(\d{3})+(?!\d))'),
+      (match) => '.',
+    );
+  }
+
+  String formatTanggal(dynamic value) {
+    if (value == null) return '-';
+
+    try {
+      final tanggal =
+          DateTime.parse(value.toString()).toLocal();
+
+      const bulan = [
+        'Jan', 'Feb', 'Mar', 'Apr',
+        'Mei', 'Jun', 'Jul', 'Agu',
+        'Sep', 'Okt', 'Nov', 'Des',
+      ];
+
+      return '${tanggal.day} '
+          '${bulan[tanggal.month - 1]} '
+          '${tanggal.year}, '
+          '${tanggal.hour.toString().padLeft(2, '0')}:'
+          '${tanggal.minute.toString().padLeft(2, '0')} WIB';
+    } catch (_) {
+      return '-';
+    }
+  }
+
+  // ==========================================
+  // STATUS DARI DATABASE
+  // ==========================================
+
+  String get statusDatabase {
+    return dataSetoran?['status']
+            ?.toString()
+            .toLowerCase() ??
+        'menunggu';
+  }
+
+  bool get diterima {
+    return statusDatabase == 'disetujui' ||
+        statusDatabase == 'diterima';
+  }
+
+  bool get ditolak => statusDatabase == 'ditolak';
+
+  String get labelStatus {
+    if (diterima) return 'Disetujui & Tervalidasi';
+    if (ditolak) return 'Setoran Ditolak';
+    return 'Menunggu Verifikasi';
+  }
+
+  String get deskripsiStatus {
+    if (diterima) {
+      return 'Setoran telah disetujui oleh admin.';
+    }
+
+    if (ditolak) {
+      return 'Setoran tidak disetujui oleh admin.';
+    }
+
+    return 'Setoran sedang diperiksa oleh admin.';
+  }
+
+  Color get warnaStatus {
+    if (diterima) return darkGreen;
+    if (ditolak) return const Color(0xFFC84444);
+    return const Color(0xFFB98220);
+  }
+
+  Color get backgroundStatus {
+    if (diterima) return const Color(0xFFD5F6E4);
+    if (ditolak) return const Color(0xFFFFE7E7);
+    return const Color(0xFFFFF1D6);
+  }
+
+  // ==========================================
+  // TAMPILAN UTAMA
+  // ==========================================
+
+  @override
   Widget build(BuildContext context) {
-    final tanggal = date ?? DateTime.now();
+    if (sedangMemuat) {
+      return const Scaffold(
+        backgroundColor: bg,
+        body: Center(
+          child: CircularProgressIndicator(
+            color: green,
+          ),
+        ),
+      );
+    }
 
-    final rate = category == 'Plastik'
-        ? 3000
-        : category == 'Kertas'
-            ? 2000
-            : 5000;
+    if (pesanError != null || dataSetoran == null) {
+      return _tampilanError();
+    }
 
-    final total = rate * weight;
-    final diterima = status == 'Diterima';
-    final ditolak = status == 'Ditolak';
+    final tanggal = dataSetoran!['tanggal'];
 
-    final warna = diterima
-        ? darkGreen
-        : ditolak
-            ? const Color(0xFFC84444)
-            : const Color(0xFFB98220);
+    final totalBerat =
+        (dataSetoran!['total_berat'] as num?)?.toDouble() ?? 0;
 
-    final nomor = nomorSetoran ??
-        '#RPH-${tanggal.year}-${tanggal.millisecondsSinceEpoch.toString().substring(7)}';
+    final totalNilai =
+        (dataSetoran!['total_nilai'] as num?)?.toDouble() ?? 0;
 
-    final tanggalText =
-        '${tanggal.day} ${_bulan(tanggal.month)} ${tanggal.year}, '
-        '${tanggal.hour.toString().padLeft(2, '0')}:'
-        '${tanggal.minute.toString().padLeft(2, '0')} WIB';
+    final catatan =
+        dataSetoran!['catatan']?.toString() ?? '';
+
+    final nomor = '#RPH-${widget.idSetoran}';
 
     return Scaffold(
       backgroundColor: bg,
       body: SafeArea(
         child: Column(
           children: [
-            // Header
+            // HEADER
             Padding(
               padding: const EdgeInsets.symmetric(
                 horizontal: 12,
@@ -105,18 +313,13 @@ class DetailSetoranScreen extends StatelessWidget {
 
             const Divider(height: 1, color: border),
 
-            // Isi halaman
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.all(14),
                 children: [
-                  // Status setoran
+                  // STATUS SETORAN
                   _card(
-                    color: diterima
-                        ? const Color(0xFFD5F6E4)
-                        : ditolak
-                            ? const Color(0xFFFFE7E7)
-                            : const Color(0xFFFFF1D6),
+                    color: backgroundStatus,
                     child: Row(
                       children: [
                         Icon(
@@ -125,33 +328,26 @@ class DetailSetoranScreen extends StatelessWidget {
                               : ditolak
                                   ? Icons.cancel_rounded
                                   : Icons.hourglass_top_rounded,
-                          color: warna,
+                          color: warnaStatus,
                           size: 29,
                         ),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                            crossAxisAlignment:
+                                CrossAxisAlignment.start,
                             children: [
                               Text(
-                                diterima
-                                    ? 'Disetujui & Tervalidasi'
-                                    : ditolak
-                                        ? 'Setoran Ditolak'
-                                        : 'Menunggu Verifikasi',
+                                labelStatus,
                                 style: TextStyle(
-                                  color: warna,
+                                  color: warnaStatus,
                                   fontSize: 14,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
                               const SizedBox(height: 3),
                               Text(
-                                diterima
-                                    ? 'Saldo dialokasikan ke dompet kas kelas'
-                                    : ditolak
-                                        ? 'Setoran tidak disetujui admin'
-                                        : 'Setoran sedang diperiksa admin',
+                                deskripsiStatus,
                                 style: const TextStyle(
                                   color: ink,
                                   fontSize: 12,
@@ -166,7 +362,7 @@ class DetailSetoranScreen extends StatelessWidget {
                               : ditolak
                                   ? 'Ditolak'
                                   : 'Proses',
-                          warna,
+                          warnaStatus,
                           Colors.white,
                         ),
                       ],
@@ -175,7 +371,7 @@ class DetailSetoranScreen extends StatelessWidget {
 
                   const SizedBox(height: 12),
 
-                  // Reward
+                  // REWARD
                   _card(
                     color: green,
                     child: Column(
@@ -193,7 +389,9 @@ class DetailSetoranScreen extends StatelessWidget {
                         Text(
                           diterima
                               ? 'Total Reward Diterima'
-                              : 'Estimasi Reward',
+                              : ditolak
+                                  ? 'Reward Tidak Diterima'
+                                  : 'Estimasi Reward',
                           style: const TextStyle(
                             color: Colors.white70,
                             fontSize: 12,
@@ -201,7 +399,7 @@ class DetailSetoranScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: 3),
                         Text(
-                          'Rp ${_rupiah(ditolak ? 0 : total)}',
+                          'Rp ${rupiah(ditolak ? 0 : totalNilai)}',
                           style: RupahTheme.heading(
                             size: 14,
                             color: Colors.white,
@@ -209,17 +407,16 @@ class DetailSetoranScreen extends StatelessWidget {
                         ),
                         const Divider(color: Colors.white38),
                         Text(
-                          'Tarif: Rp ${_rupiah(rate)} /Kg × '
-                          '${weight.toStringAsFixed(1)} Kg',
+                          'Total berat: ${totalBerat.toStringAsFixed(1)} Kg',
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 12,
                           ),
                         ),
                         const SizedBox(height: 6),
-                        const Text(
-                          '♟ Kas Kelas XI RPL 1',
-                          style: TextStyle(
+                        Text(
+                          'Kas Kelas $namaKelas',
+                          style: const TextStyle(
                             color: Colors.white,
                             fontSize: 12,
                           ),
@@ -230,7 +427,7 @@ class DetailSetoranScreen extends StatelessWidget {
 
                   const SizedBox(height: 12),
 
-                  // Informasi penimbangan
+                  // INFORMASI TRANSAKSI
                   _card(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -245,20 +442,63 @@ class DetailSetoranScreen extends StatelessWidget {
                         const SizedBox(height: 16),
 
                         _info('ID Transaksi / Ref', nomor),
-                        _info('Waktu Setor', tanggalText),
-                        _info('Kelas Penyetor', 'Kelas XI RPL 1'),
-                        _info('Jenis Sampah', category),
+                        _info('Waktu Setor', formatTanggal(tanggal)),
+                        _info('Kelas Penyetor', namaKelas),
 
                         const Divider(height: 18),
 
-                        _info(
-                          'Berat Timbangan Akhir',
-                          '${weight.toStringAsFixed(1)} Kg',
-                          valueColor: green,
-                        ),
+                        if (daftarDetail.isEmpty)
+                          const Text(
+                            'Belum ada detail sampah untuk setoran ini.',
+                            style: TextStyle(
+                              color: muted,
+                              fontSize: 12,
+                            ),
+                          ),
 
-                        if (note.trim().isNotEmpty) ...[
-                          const SizedBox(height: 8),
+                        ...daftarDetail.map((item) {
+                          final sampah =
+                              item['sampah'] as Map<String, dynamic>?;
+
+                          final nama =
+                              sampah?['nama_sampah']?.toString() ?? '-';
+
+                          final kategori =
+                              sampah?['kategori']?.toString() ?? '-';
+
+                          final berat =
+                              (item['berat_kg'] as num?)?.toDouble() ?? 0;
+
+                          final harga =
+                              (sampah?['harga_per_kg'] as num?)
+                                      ?.toDouble() ??
+                                  0;
+
+                          final satuan =
+                              sampah?['satuan']?.toString() ?? 'kg';
+
+                          return Column(
+                            crossAxisAlignment:
+                                CrossAxisAlignment.start,
+                            children: [
+                              _info('Nama Sampah', nama),
+                              _info('Kategori', kategori),
+                              _info(
+                                'Berat Timbangan',
+                                '${berat.toStringAsFixed(1)} Kg',
+                                valueColor: green,
+                              ),
+                              _info(
+                                'Tarif per $satuan',
+                                'Rp ${rupiah(harga)}',
+                              ),
+                              const Divider(height: 18),
+                            ],
+                          );
+                        }),
+
+                        if (catatan.trim().isNotEmpty) ...[
+                          const SizedBox(height: 4),
                           const Text(
                             'CATATAN PENYETOR',
                             style: TextStyle(
@@ -269,7 +509,7 @@ class DetailSetoranScreen extends StatelessWidget {
                           ),
                           const SizedBox(height: 6),
                           Text(
-                            note,
+                            catatan,
                             style: const TextStyle(
                               color: ink,
                               fontSize: 12,
@@ -283,7 +523,7 @@ class DetailSetoranScreen extends StatelessWidget {
 
                   const SizedBox(height: 12),
 
-                  // Bukti foto
+                  // FOTO BUKTI
                   _card(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -305,20 +545,16 @@ class DetailSetoranScreen extends StatelessWidget {
                                 ),
                               ),
                             ),
-                            _chip(
-                              'Foto Terverifikasi',
-                              const Color(0xFFD5F6E4),
-                              darkGreen,
-                            ),
                           ],
                         ),
                         const SizedBox(height: 12),
+
                         ClipRRect(
                           borderRadius: BorderRadius.circular(12),
                           child: SizedBox(
                             width: double.infinity,
                             height: 160,
-                            child: photoBytes == null
+                            child: fotoUrl == null
                                 ? const ColoredBox(
                                     color: Color(0xFFE3E6EB),
                                     child: Center(
@@ -329,9 +565,21 @@ class DetailSetoranScreen extends StatelessWidget {
                                       ),
                                     ),
                                   )
-                                : Image.memory(
-                                    photoBytes!,
+                                : Image.network(
+                                    fotoUrl!,
                                     fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) {
+                                      return const ColoredBox(
+                                        color: Color(0xFFE3E6EB),
+                                        child: Center(
+                                          child: Icon(
+                                            Icons.broken_image_outlined,
+                                            size: 42,
+                                            color: muted,
+                                          ),
+                                        ),
+                                      );
+                                    },
                                   ),
                           ),
                         ),
@@ -361,6 +609,61 @@ class DetailSetoranScreen extends StatelessWidget {
       ),
     );
   }
+
+  // ==========================================
+  // TAMPILAN ERROR
+  // ==========================================
+
+  Widget _tampilanError() {
+    return Scaffold(
+      backgroundColor: bg,
+      appBar: AppBar(
+        backgroundColor: bg,
+        title: const Text('Detail Setoran'),
+      ),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.error_outline_rounded,
+                color: Colors.redAccent,
+                size: 42,
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Gagal Memuat Detail Setoran',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: ink,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                pesanError ?? 'Data setoran tidak ditemukan.',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: muted,
+                  fontSize: 12,
+                ),
+              ),
+              const SizedBox(height: 14),
+              ElevatedButton(
+                onPressed: muatDetailSetoran,
+                child: const Text('Coba Lagi'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ==========================================
+  // KOMPONEN TAMPILAN
+  // ==========================================
 
   Widget _card({
     required Widget child,
@@ -420,14 +723,14 @@ class DetailSetoranScreen extends StatelessWidget {
     );
   }
 
-  Widget _chip(String text, Color bg, Color fg) {
+  Widget _chip(String text, Color bgColor, Color fg) {
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: 9,
         vertical: 5,
       ),
       decoration: BoxDecoration(
-        color: bg,
+        color: bgColor,
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
@@ -440,24 +743,4 @@ class DetailSetoranScreen extends StatelessWidget {
       ),
     );
   }
-
-  String _bulan(int month) => [
-        'Jan',
-        'Feb',
-        'Mar',
-        'Apr',
-        'Mei',
-        'Jun',
-        'Jul',
-        'Agu',
-        'Sep',
-        'Okt',
-        'Nov',
-        'Des',
-      ][month - 1];
-
-  String _rupiah(num value) => value.toStringAsFixed(0).replaceAllMapped(
-        RegExp(r'\B(?=(\d{3})+(?!\d))'),
-        (m) => '.',
-      );
 }

@@ -1,304 +1,474 @@
 
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 import 'setor_sampah_screen.dart';
 import 'profil_user_screen.dart';
 
-class DashboardScreens extends StatelessWidget {
+class DashboardScreens extends StatefulWidget {
   const DashboardScreens({super.key});
 
+  @override
+  State<DashboardScreens> createState() => _DashboardScreensState();
+}
+
+class _DashboardScreensState extends State<DashboardScreens> {
   static const Color hijau = Color(0xFF2D9565);
   static const Color background = Color(0xFFF6F8FC);
   static const Color teks = Color(0xFF172235);
+
+  final SupabaseClient supabase = Supabase.instance.client;
+
+  String namaKelas = 'Memuat...';
+  String saldoKelas = '...';
+  String totalSampah = '...';
+  String totalSetoran = '...';
+
+  bool sedangMemuat = true;
+  String? pesanError;
+
+  @override
+  void initState() {
+    super.initState();
+    loadDashboard();
+  }
+
+  // MENGAMBIL DATA DASHBOARD DARI SUPABASE
+  Future<void> loadDashboard() async {
+    setState(() {
+      sedangMemuat = true;
+      pesanError = null;
+    });
+
+    try {
+      final user = supabase.auth.currentUser;
+
+      if (user == null) {
+        throw Exception('Pengguna belum login.');
+      }
+
+      // 1. Mengambil data akun user
+      final dataUser = await supabase
+          .from('users')
+          .select('username, id_kelas')
+          .eq('id_user', user.id)
+          .maybeSingle();
+
+      if (dataUser == null) {
+        throw Exception('Data akun tidak ditemukan.');
+      }
+
+      // 2. Mengambil nama kelas
+      final idKelas = dataUser['id_kelas'];
+
+      if (idKelas != null) {
+        final dataKelas = await supabase
+            .from('kelas')
+            .select('nama_kelas')
+            .eq('id_kelas', idKelas)
+            .maybeSingle();
+
+        namaKelas = dataKelas?['nama_kelas'] ?? 'Kelas belum terdaftar';
+      } else {
+        namaKelas = 'Kelas belum terdaftar';
+      }
+
+      // 3. Mengambil seluruh setoran milik akun kelas
+      final dataSetoran = await supabase
+          .from('setoran')
+          .select('total_berat, total_nilai, status')
+          .eq('id_user', user.id);
+
+      double beratTerkumpul = 0;
+      double saldoTerkumpul = 0;
+      int jumlahSetoran = dataSetoran.length;
+
+      // 4. Menghitung hanya setoran yang disetujui
+      for (final item in dataSetoran) {
+        final status = (item['status'] ?? '')
+            .toString()
+            .toLowerCase()
+            .trim();
+
+        if (status == 'disetujui') {
+          beratTerkumpul +=
+              double.tryParse(item['total_berat'].toString()) ?? 0;
+
+          saldoTerkumpul +=
+              double.tryParse(item['total_nilai'].toString()) ?? 0;
+        }
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        saldoKelas = formatRupiah(saldoTerkumpul);
+        totalSampah = '${formatAngka(beratTerkumpul)} Kg';
+        totalSetoran = '$jumlahSetoran Setoran';
+        sedangMemuat = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+
+      setState(() {
+        sedangMemuat = false;
+        pesanError = error.toString();
+        namaKelas = 'Data tidak tersedia';
+        saldoKelas = '—';
+        totalSampah = '—';
+        totalSetoran = '—';
+      });
+    }
+  }
+
+  // FORMAT RUPIAH
+  String formatRupiah(double angka) {
+    final nilai = angka.round().toString();
+    final hasil = StringBuffer();
+
+    for (int i = 0; i < nilai.length; i++) {
+      if (i > 0 && (nilai.length - i) % 3 == 0) {
+        hasil.write('.');
+      }
+      hasil.write(nilai[i]);
+    }
+
+    return 'Rp ${hasil.toString()}';
+  }
+
+  // FORMAT BERAT SAMPAH
+  String formatAngka(double angka) {
+    if (angka == angka.roundToDouble()) {
+      return angka.toInt().toString();
+    }
+
+    return angka.toStringAsFixed(2).replaceAll('.', ',');
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: background,
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // HEADER
-              Row(
-                children: [
-                  Image.asset(
-                    'assets/logo_rupah.png',
-                    width: 65,
-                    height: 65,
-                    fit: BoxFit.contain,
-                    errorBuilder: (context, error, stackTrace) {
-                      return const Icon(
-                        Icons.broken_image,
-                        size: 40,
-                        color: Colors.red,
-                      );
-                    },
-                  ),
-                  const Spacer(),
-                  const Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Halo, 👋',
-                        style: TextStyle(
-                          color: Colors.black54,
-                          fontSize: 12,
-                        ),
-                      ),
-                      Text(
-                        'Kelas XI RPL 1',
-                        style: TextStyle(
-                          color: teks,
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 24),
-
-              // KARTU SALDO
-              Container(
-                width: double.infinity,
-                height: 200,
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [
-                      Color(0xFF5BAEAB),
-                      Color(0xFF2D9565),
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(24),
-                  boxShadow: [
-                    BoxShadow(
-                      color: hijau.withOpacity(0.18),
-                      blurRadius: 18,
-                      offset: const Offset(0, 8),
-                    ),
-                  ],
-                ),
-                child: Stack(
+        child: RefreshIndicator(
+          onRefresh: loadDashboard,
+          color: hijau,
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // HEADER
+                Row(
                   children: [
-                    const Positioned(
-                      right: -5,
-                      bottom: -15,
-                      child: Icon(
-                        Icons.eco,
-                        size: 125,
-                        color: Color(0x335FFFFFF),
-                      ),
+                    Image.asset(
+                      'assets/logo_rupah.png',
+                      width: 65,
+                      height: 65,
+                      fit: BoxFit.contain,
+                      errorBuilder: (context, error, stackTrace) {
+                        return const Icon(
+                          Icons.broken_image,
+                          size: 40,
+                          color: Colors.red,
+                        );
+                      },
                     ),
+                    const Spacer(),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.18),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: const Text(
-                            '💰 Saldo Kelas',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
-                        const Spacer(),
                         const Text(
-                          'Total Tabungan Terkumpul',
+                          'Halo, 👋',
                           style: TextStyle(
-                            color: Colors.white70,
+                            color: Colors.black54,
                             fontSize: 12,
                           ),
                         ),
-                        const SizedBox(height: 4),
-                        const Text(
-                          'Rp 50.000',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 26,
+                        Text(
+                          namaKelas,
+                          style: const TextStyle(
+                            color: teks,
+                            fontSize: 14,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
                       ],
                     ),
-                    Positioned(
-                      right: 0,
-                      top: 2,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 5,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0x4459F5A5),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: const Text(
-                          'AKTIF & TERVERIFIKASI',
-                          style: TextStyle(
-                            color: Color(0xFFB8FFD2),
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ),
                   ],
                 ),
-              ),
 
-              const SizedBox(height: 16),
-
-              // STATISTIK
-              Row(
-                children: [
-                  Expanded(
-                    child: kartuStatistik(
-                      icon: Icons.recycling,
-                      judul: 'Total Sampah',
-                      nilai: '25 Kg',
-                      warna: const Color(0xFFD1F9DF),
-                      warnaIcon: const Color(0xFF087D50),
+                if (pesanError != null) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFEEEE),
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: kartuStatistik(
-                      icon: Icons.inventory_2_outlined,
-                      judul: 'Total Setoran',
-                      nilai: '8 Setoran',
-                      warna: const Color(0xFFCCF7F7),
-                      warnaIcon: const Color(0xFF008A8A),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.error_outline,
+                          color: Colors.red,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Gagal memuat data. Tarik layar ke bawah untuk mencoba lagi.',
+                            style: const TextStyle(
+                              color: Colors.red,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
-              ),
 
-              const SizedBox(height: 22),
+                const SizedBox(height: 24),
 
-              // MENU UTAMA
-              const Text(
-                'Menu Utama',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: teks,
-                ),
-              ),
-
-              const SizedBox(height: 12),
-
-              // MENU SETOR SAMPAH
-              menuUtama(
-                context,
-                icon: Icons.delete_outline,
-                judul: 'Setor Sampah',
-                deskripsi: 'Kirim setoran baru',
-                warna: const Color(0xFFD8FBE4),
-                warnaIcon: const Color(0xFF168451),
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) =>
-                          const SetorSampahScreen(),
+                // KARTU SALDO
+                Container(
+                  width: double.infinity,
+                  height: 200,
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [
+                        Color(0xFF5BAEAB),
+                        Color(0xFF2D9565),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
                     ),
-                  );
-                },
-              ),
-
-              const SizedBox(height: 12),
-
-              // MENU PROFIL KELAS
-              menuUtama(
-                context,
-                icon: Icons.person,
-                judul: 'Profil Kelas',
-                deskripsi: 'Pengaturan akun',
-                warna: const Color(0xFFDCE9FF),
-                warnaIcon: const Color(0xFF527DB8),
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) =>
-                          ProfilUserScreen(),
-                    ),
-                  );
-                },
-              ),
-
-              const SizedBox(height: 36),
-
-              // TIPS ECO-FIN
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE5F8F8),
-                  border: Border.all(
-                    color: const Color(0xFF8CF0B2),
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(
+                        color: hijau.withValues(alpha: 0.18),
+                        blurRadius: 18,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
                   ),
-                  borderRadius: BorderRadius.circular(17),
+                  child: Stack(
+                    children: [
+                      const Positioned(
+                        right: -5,
+                        bottom: -15,
+                        child: Icon(
+                          Icons.eco,
+                          size: 125,
+                          color: Color(0x335FFFFFF),
+                        ),
+                      ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.18),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: const Text(
+                              '💰 Saldo Kelas',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                          const Spacer(),
+                          const Text(
+                            'Total Tabungan Terkumpul',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 12,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            saldoKelas,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 26,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                      Positioned(
+                        right: 0,
+                        top: 2,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0x4459F5A5),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: const Text(
+                            'AKTIF & TERVERIFIKASI',
+                            style: TextStyle(
+                              color: Color(0xFFB8FFD2),
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                child: const Row(
+
+                const SizedBox(height: 16),
+
+                // STATISTIK
+                Row(
                   children: [
-                    CircleAvatar(
-                      radius: 19,
-                      backgroundColor: Colors.white,
-                      child: Icon(
-                        Icons.lightbulb_outline,
-                        color: Color(0xFF087D50),
+                    Expanded(
+                      child: kartuStatistik(
+                        icon: Icons.recycling,
+                        judul: 'Total Sampah',
+                        nilai: totalSampah,
+                        warna: const Color(0xFFD1F9DF),
+                        warnaIcon: const Color(0xFF087D50),
                       ),
                     ),
-                    SizedBox(width: 12),
+                    const SizedBox(width: 12),
                     Expanded(
-                      child: Text.rich(
-                        TextSpan(
-                          style: TextStyle(
-                            color: teks,
-                            fontSize: 12,
-                            height: 1.5,
-                          ),
-                          children: [
-                            TextSpan(
-                              text: 'Tips Eco-Fin: ',
-                              style: TextStyle(
-                                color: Color(0xFF087D50),
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            TextSpan(
-                              text:
-                                  'Pastikan botol plastik dipisahkan '
-                                  'dan dikeringkan agar timbangan '
-                                  'lebih efisien!',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
+                      child: kartuStatistik(
+                        icon: Icons.inventory_2_outlined,
+                        judul: 'Total Setoran',
+                        nilai: totalSetoran,
+                        warna: const Color(0xFFCCF7F7),
+                        warnaIcon: const Color(0xFF008A8A),
                       ),
                     ),
                   ],
                 ),
-              ),
-            ],
+
+                const SizedBox(height: 22),
+
+                // MENU UTAMA
+                const Text(
+                  'Menu Utama',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: teks,
+                  ),
+                ),
+
+                const SizedBox(height: 12),
+
+                // MENU SETOR SAMPAH
+                menuUtama(
+                  context,
+                  icon: Icons.delete_outline,
+                  judul: 'Setor Sampah',
+                  deskripsi: 'Kirim setoran baru',
+                  warna: const Color(0xFFD8FBE4),
+                  warnaIcon: const Color(0xFF168451),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) =>
+                            const SetorSampahScreen(),
+                      ),
+                    );
+                  },
+                ),
+
+                const SizedBox(height: 12),
+
+                // MENU PROFIL KELAS
+                menuUtama(
+                  context,
+                  icon: Icons.person,
+                  judul: 'Profil Kelas',
+                  deskripsi: 'Pengaturan akun',
+                  warna: const Color(0xFFDCE9FF),
+                  warnaIcon: const Color(0xFF527DB8),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => ProfilUserScreen(),
+                      ),
+                    );
+                  },
+                ),
+
+                const SizedBox(height: 36),
+
+                // TIPS ECO-FIN
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE5F8F8),
+                    border: Border.all(
+                      color: const Color(0xFF8CF0B2),
+                    ),
+                    borderRadius: BorderRadius.circular(17),
+                  ),
+                  child: const Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 19,
+                        backgroundColor: Colors.white,
+                        child: Icon(
+                          Icons.lightbulb_outline,
+                          color: Color(0xFF087D50),
+                        ),
+                      ),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: Text.rich(
+                          TextSpan(
+                            style: TextStyle(
+                              color: teks,
+                              fontSize: 12,
+                              height: 1.5,
+                            ),
+                            children: [
+                              TextSpan(
+                                text: 'Tips Eco-Fin: ',
+                                style: TextStyle(
+                                  color: Color(0xFF087D50),
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              TextSpan(
+                                text:
+                                    'Pastikan botol plastik dipisahkan '
+                                    'dan dikeringkan agar timbangan '
+                                    'lebih efisien!',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -324,7 +494,7 @@ class DashboardScreens extends StatelessWidget {
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.035),
+            color: Colors.black.withValues(alpha: 0.035),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -397,7 +567,7 @@ class DashboardScreens extends StatelessWidget {
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.025),
+                color: Colors.black.withValues(alpha: 0.025),
                 blurRadius: 8,
                 offset: const Offset(0, 3),
               ),

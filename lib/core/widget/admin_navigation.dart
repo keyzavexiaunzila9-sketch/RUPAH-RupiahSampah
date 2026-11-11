@@ -13,19 +13,20 @@ class AdminNavigation extends StatefulWidget {
   const AdminNavigation({super.key});
 
   @override
-  State<AdminNavigation> createState() =>
-      _AdminNavigationState();
+  State<AdminNavigation> createState() => _AdminNavigationState();
 }
 
 class _AdminNavigationState extends State<AdminNavigation> {
   int _currentIndex = 0;
 
-  final List<Widget> _pages = const [
-    DashboardAdminScreen(),
-    VerifikasiSetoranScreen(),
-    DataSampahScreen(),
-    DataKelasScreen(),
-    RiwayatAdminScreen(),
+  late final List<Widget> _pages = [
+    DashboardAdminScreen(
+      onOpenVerification: () => _onTap(1),
+    ),
+    const VerifikasiSetoranScreen(),
+    const DataSampahScreen(),
+    const DataKelasScreen(),
+    const RiwayatAdminScreen(),
   ];
 
   void _onTap(int index) {
@@ -37,9 +38,12 @@ class _AdminNavigationState extends State<AdminNavigation> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(
-        index: _currentIndex,
-        children: _pages,
+      backgroundColor: RupahColors.background,
+      body: SafeArea(
+        child: IndexedStack(
+          index: _currentIndex,
+          children: _pages,
+        ),
       ),
       bottomNavigationBar: _buildBottomNav(),
     );
