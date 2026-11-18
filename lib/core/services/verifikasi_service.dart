@@ -1,8 +1,38 @@
 
+import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class VerifikasiService {
   final SupabaseClient _supabase = Supabase.instance.client;
+
+
+  Future<String?> _buatSignedFotoUrl(dynamic fotoPath) async {
+    if (fotoPath == null || fotoPath.toString().trim().isEmpty) {
+      return null;
+    }
+
+    final path = fotoPath.toString().trim();
+
+    // Jika sudah berupa URL lengkap, gunakan langsung.
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      return path;
+    }
+
+    try {
+      final signedUrl = await _supabase.storage
+          .from('bukti-setoran')
+          .createSignedUrl(path, 3600);
+
+      return signedUrl;
+    } catch (e) {
+      debugPrint('Gagal membuat Signed URL foto: $e');
+      return null;
+    }
+  }
+
+  // =========================================================
+  // DATA VERIFIKASI
+  // =========================================================
 
   Future<List<Map<String, dynamic>>> getVerifikasi() async {
     final response = await _supabase
@@ -25,6 +55,10 @@ class VerifikasiService {
     return List<Map<String, dynamic>>.from(response);
   }
 
+  // =========================================================
+  // DATA SETORAN UNTUK HALAMAN VERIFIKASI
+  // =========================================================
+
   Future<List<Map<String, dynamic>>> getDataSetoran() async {
     final setoranResponse = await _supabase
         .from('setoran')
@@ -36,6 +70,14 @@ class VerifikasiService {
 
     if (setoranList.isEmpty) return [];
 
+    // Ubah path foto menjadi Signed URL.
+    for (final setoran in setoranList) {
+      setoran['foto_url'] = await _buatSignedFotoUrl(
+        setoran['foto_url'],
+      );
+    }
+
+    // Ambil ID pengguna.
     final userIds = setoranList
         .map((item) => item['id_user'])
         .where((id) => id != null)
@@ -53,6 +95,7 @@ class VerifikasiService {
       userList = List<Map<String, dynamic>>.from(response);
     }
 
+    // Ambil ID kelas.
     final kelasIds = userList
         .map((item) => item['id_kelas'])
         .where((id) => id != null)
@@ -70,6 +113,7 @@ class VerifikasiService {
       kelasList = List<Map<String, dynamic>>.from(response);
     }
 
+    // Ambil detail setoran.
     final setoranIds = setoranList
         .map((item) => item['id_setoran'])
         .toList();
@@ -82,6 +126,7 @@ class VerifikasiService {
     final detailList =
         List<Map<String, dynamic>>.from(detailResponse);
 
+    // Ambil ID sampah.
     final sampahIds = detailList
         .map((item) => item['id_sampah'])
         .where((id) => id != null)
@@ -101,6 +146,7 @@ class VerifikasiService {
       sampahList = List<Map<String, dynamic>>.from(response);
     }
 
+    // Gabungkan seluruh data.
     return setoranList.map((setoran) {
       final user = userList.firstWhere(
         (item) =>
@@ -149,10 +195,13 @@ class VerifikasiService {
     }).toList();
   }
 
+  // =========================================================
+  // BUKTI PENOLAKAN
+  // =========================================================
+
   Future<Map<String, dynamic>> getBuktiPenolakan(
     int idSetoran,
   ) async {
-    // Ambil data setoran.
     final setoranResponse = await _supabase
         .from('setoran')
         .select()
@@ -163,7 +212,13 @@ class VerifikasiService {
       throw Exception('Data setoran tidak ditemukan.');
     }
 
-    final setoran = Map<String, dynamic>.from(setoranResponse);
+    final setoran =
+        Map<String, dynamic>.from(setoranResponse);
+
+    // Ubah path foto menjadi Signed URL.
+    setoran['foto_url'] = await _buatSignedFotoUrl(
+      setoran['foto_url'],
+    );
 
     // Ambil verifikasi terakhir.
     final verifikasiResponse = await _supabase
@@ -231,7 +286,8 @@ class VerifikasiService {
           .select('id_sampah, nama_sampah, kategori')
           .inFilter('id_sampah', sampahIds);
 
-      sampahList = List<Map<String, dynamic>>.from(sampahResponse);
+      sampahList =
+          List<Map<String, dynamic>>.from(sampahResponse);
     }
 
     final detail = detailList.map((item) {
@@ -249,7 +305,7 @@ class VerifikasiService {
       };
     }).toList();
 
-    // Ambil nama admin yang melakukan verifikasi.
+    // Ambil nama admin.
     Map<String, dynamic> admin = {};
 
     if (verifikasi['id_admin'] != null) {
@@ -280,6 +336,10 @@ class VerifikasiService {
     };
   }
 
+  // =========================================================
+  // TAMBAH VERIFIKASI
+  // =========================================================
+
   Future<void> tambahVerifikasi({
     required int idSetoran,
     required String idAdmin,
@@ -295,6 +355,10 @@ class VerifikasiService {
     });
   }
 
+  // =========================================================
+  // UPDATE VERIFIKASI
+  // =========================================================
+
   Future<void> updateVerifikasi({
     required int idVerifikasi,
     required String statusVerifikasi,
@@ -306,6 +370,11 @@ class VerifikasiService {
       'tanggal': DateTime.now().toUtc().toIso8601String(),
     }).eq('id_verifikasi', idVerifikasi);
   }
+
+  // =========================================================
+  // VERIFIKASI SETORAN
+  // =========================================================
+
   Future<void> verifikasiSetoran({
     required int idSetoran,
     required String status,
@@ -349,6 +418,11 @@ class VerifikasiService {
       'catatan': catatan,
     }).eq('id_setoran', idSetoran);
   }
+
+  // =========================================================
+  // TOLAK SETORAN
+  // =========================================================
+
   Future<void> tolakSetoran({
     required int idSetoran,
     required String kategoriPenolakan,
@@ -392,6 +466,7 @@ class VerifikasiService {
       'catatan': catatan,
     }).eq('id_setoran', idSetoran);
   }
+
   Future<void> hapusVerifikasi(int idVerifikasi) async {
     await _supabase
         .from('verifikasi')

@@ -21,6 +21,8 @@ class _VerifikasiSetoranScreenState
   static const Color muted = Color(0xFF78857F);
   static const Color border = Color(0xFFE8EDF2);
 
+  static const int _itemsPerPage = 10;
+
   final VerifikasiService _service = VerifikasiService();
   final TextEditingController searchController =
       TextEditingController();
@@ -29,6 +31,11 @@ class _VerifikasiSetoranScreenState
 
   bool isLoading = true;
   String? errorMessage;
+
+  int currentPage = 1;
+
+  String selectedDateFilter = 'Semua';
+  String selectedSort = 'Terbaru';
 
   @override
   void initState() {
@@ -42,7 +49,10 @@ class _VerifikasiSetoranScreenState
     super.dispose();
   }
 
+  // ==========================================
   // MEMUAT DATA DARI SUPABASE
+  // ==========================================
+
   Future<void> loadData() async {
     if (!mounted) return;
 
@@ -59,6 +69,7 @@ class _VerifikasiSetoranScreenState
       setState(() {
         dataSetoran = result;
         isLoading = false;
+        currentPage = 1;
       });
     } catch (e) {
       if (!mounted) return;
@@ -70,77 +81,27 @@ class _VerifikasiSetoranScreenState
     }
   }
 
-  // DATA YANG MENUNGGU VERIFIKASI
-  List<Map<String, dynamic>> get filteredData {
-    final keyword = searchController.text.trim().toLowerCase();
+  // ==========================================
+  // KONVERSI ANGKA
+  // ==========================================
 
-    return dataSetoran.where((data) {
-      final status =
-          data['status']?.toString().toLowerCase() ?? '';
-
-      final namaKelas =
-          data['nama_kelas']?.toString().toLowerCase() ?? '';
-
-      final username =
-          data['username']?.toString().toLowerCase() ?? '';
-
-      final detail = List<Map<String, dynamic>>.from(
-        data['detail'] ?? [],
-      );
-
-      final namaSampah = detail
-          .map((item) =>
-              item['nama_sampah']?.toString() ?? '')
-          .join(' ')
-          .toLowerCase();
-
-      return status == 'menunggu' &&
-          (namaKelas.contains(keyword) ||
-              username.contains(keyword) ||
-              namaSampah.contains(keyword));
-    }).toList();
+  double _toDouble(dynamic value) {
+    if (value == null) return 0;
+    return double.tryParse(value.toString()) ?? 0;
   }
 
-  // STATISTIK MENUNGGU
-  int get jumlahMenunggu {
-    return dataSetoran.where((data) {
-      return data['status']?.toString().toLowerCase() ==
-          'menunggu';
-    }).length;
-  }
+  // ==========================================
+  // MEMBACA TANGGAL
+  // ==========================================
 
-  // STATISTIK DISETUJUI HARI INI
-  int get jumlahDisetujuiHariIni {
-    return dataSetoran.where((data) {
-      final status =
-          data['status']?.toString().toLowerCase() ?? '';
+  DateTime? _parseTanggal(dynamic value) {
+    if (value == null) return null;
 
-      final tanggal =
-          DateTime.tryParse(data['tanggal']?.toString() ?? '');
-
-      return status == 'disetujui' &&
-          tanggal != null &&
-          _isToday(tanggal);
-    }).length;
-  }
-
-  // TOTAL BERAT DISETUJUI HARI INI
-  double get beratHariIni {
-    return dataSetoran.where((data) {
-      final status =
-          data['status']?.toString().toLowerCase() ?? '';
-
-      final tanggal =
-          DateTime.tryParse(data['tanggal']?.toString() ?? '');
-
-      return status == 'disetujui' &&
-          tanggal != null &&
-          _isToday(tanggal);
-    }).fold<double>(
-      0,
-      (total, data) =>
-          total + _toDouble(data['total_berat']),
-    );
+    try {
+      return DateTime.parse(value.toString()).toLocal();
+    } catch (_) {
+      return null;
+    }
   }
 
   bool _isToday(DateTime tanggal) {
@@ -152,10 +113,224 @@ class _VerifikasiSetoranScreenState
         localDate.day == now.day;
   }
 
-  double _toDouble(dynamic value) {
-    if (value == null) return 0;
-    return double.tryParse(value.toString()) ?? 0;
+  bool _isThisWeek(DateTime tanggal) {
+    final now = DateTime.now();
+    final awalMinggu = DateTime(
+      now.year,
+      now.month,
+      now.day,
+    ).subtract(
+      Duration(days: now.weekday - 1),
+    );
+
+    final awalMingguDepan =
+        awalMinggu.add(const Duration(days: 7));
+
+    return !tanggal.isBefore(awalMinggu) &&
+        tanggal.isBefore(awalMingguDepan);
   }
+
+  bool _isThisMonth(DateTime tanggal) {
+    final now = DateTime.now();
+
+    return tanggal.year == now.year &&
+        tanggal.month == now.month;
+  }
+
+  // ==========================================
+  // DATA MENUNGGU + SEARCH + FILTER
+  // ==========================================
+
+  List<Map<String, dynamic>> get filteredData {
+    final keyword = searchController.text.trim().toLowerCase();
+
+    final hasil = dataSetoran.where((data) {
+      final status =
+          data['status']?.toString().toLowerCase() ?? '';
+
+      if (status != 'menunggu') return false;
+
+      final namaKelas =
+          data['nama_kelas']?.toString().toLowerCase() ?? '';
+
+      final username =
+          data['username']?.toString().toLowerCase() ?? '';
+
+      final tingkat =
+          data['tingkat']?.toString().toLowerCase() ?? '';
+
+      final jurusan =
+          data['jurusan']?.toString().toLowerCase() ?? '';
+
+      final detail = List<Map<String, dynamic>>.from(
+        data['detail'] ?? [],
+      );
+
+      final namaSampah = detail
+          .map(
+            (item) =>
+                item['nama_sampah']?.toString() ?? '',
+          )
+          .join(' ')
+          .toLowerCase();
+
+      final cocokSearch = keyword.isEmpty ||
+          namaKelas.contains(keyword) ||
+          username.contains(keyword) ||
+          tingkat.contains(keyword) ||
+          jurusan.contains(keyword) ||
+          namaSampah.contains(keyword);
+
+      if (!cocokSearch) return false;
+
+      final tanggal = _parseTanggal(data['tanggal']);
+
+      if (selectedDateFilter != 'Semua') {
+        if (tanggal == null) return false;
+
+        switch (selectedDateFilter) {
+          case 'Hari ini':
+            if (!_isToday(tanggal)) return false;
+            break;
+
+          case 'Minggu ini':
+            if (!_isThisWeek(tanggal)) return false;
+            break;
+
+          case 'Bulan ini':
+            if (!_isThisMonth(tanggal)) return false;
+            break;
+        }
+      }
+
+      return true;
+    }).toList();
+
+    // PENGURUTAN DATA
+    hasil.sort((a, b) {
+      switch (selectedSort) {
+        case 'Terlama':
+          final tanggalA = _parseTanggal(a['tanggal']);
+          final tanggalB = _parseTanggal(b['tanggal']);
+
+          if (tanggalA == null && tanggalB == null) return 0;
+          if (tanggalA == null) return 1;
+          if (tanggalB == null) return -1;
+
+          return tanggalA.compareTo(tanggalB);
+
+        case 'Berat tertinggi':
+          return _toDouble(b['total_berat'])
+              .compareTo(_toDouble(a['total_berat']));
+
+        case 'Berat terendah':
+          return _toDouble(a['total_berat'])
+              .compareTo(_toDouble(b['total_berat']));
+
+        default:
+          final tanggalA = _parseTanggal(a['tanggal']);
+          final tanggalB = _parseTanggal(b['tanggal']);
+
+          if (tanggalA == null && tanggalB == null) return 0;
+          if (tanggalA == null) return 1;
+          if (tanggalB == null) return -1;
+
+          return tanggalB.compareTo(tanggalA);
+      }
+    });
+
+    return hasil;
+  }
+
+  // ==========================================
+  // PAGINATION
+  // ==========================================
+
+  int get totalPages {
+    if (filteredData.isEmpty) return 1;
+
+    return (filteredData.length / _itemsPerPage).ceil();
+  }
+
+  List<Map<String, dynamic>> get paginatedData {
+    final data = filteredData;
+
+    final startIndex = (currentPage - 1) * _itemsPerPage;
+
+    if (startIndex >= data.length) return [];
+
+    final endIndex = (startIndex + _itemsPerPage)
+        .clamp(0, data.length);
+
+    return data.sublist(startIndex, endIndex);
+  }
+
+  void _ubahHalaman(int halaman) {
+    if (halaman < 1 || halaman > totalPages) return;
+
+    setState(() {
+      currentPage = halaman;
+    });
+  }
+
+  void _resetHalaman() {
+    setState(() {
+      currentPage = 1;
+    });
+  }
+
+  // ==========================================
+  // STATISTIK MENUNGGU
+  // ==========================================
+
+  int get jumlahMenunggu {
+    return dataSetoran.where((data) {
+      return data['status']?.toString().toLowerCase() ==
+          'menunggu';
+    }).length;
+  }
+
+  // ==========================================
+  // STATISTIK DISETUJUI HARI INI
+  // ==========================================
+
+  int get jumlahDisetujuiHariIni {
+    return dataSetoran.where((data) {
+      final status =
+          data['status']?.toString().toLowerCase() ?? '';
+
+      final tanggal = _parseTanggal(data['tanggal']);
+
+      return status == 'disetujui' &&
+          tanggal != null &&
+          _isToday(tanggal);
+    }).length;
+  }
+
+  // ==========================================
+  // TOTAL BERAT DISETUJUI HARI INI
+  // ==========================================
+
+  double get beratHariIni {
+    return dataSetoran.where((data) {
+      final status =
+          data['status']?.toString().toLowerCase() ?? '';
+
+      final tanggal = _parseTanggal(data['tanggal']);
+
+      return status == 'disetujui' &&
+          tanggal != null &&
+          _isToday(tanggal);
+    }).fold<double>(
+      0,
+      (total, data) =>
+          total + _toDouble(data['total_berat']),
+    );
+  }
+
+  // ==========================================
+  // FORMAT ANGKA
+  // ==========================================
 
   String _formatAngka(num value) {
     final angka = value.toStringAsFixed(0);
@@ -166,22 +341,27 @@ class _VerifikasiSetoranScreenState
     );
   }
 
-  String _formatTanggal(dynamic value) {
-    if (value == null) return '-';
+  // ==========================================
+  // FORMAT TANGGAL
+  // ==========================================
 
-    final tanggal = DateTime.tryParse(value.toString());
+  String _formatTanggal(dynamic value) {
+    final tanggal = _parseTanggal(value);
 
     if (tanggal == null) return '-';
 
-    final local = tanggal.toLocal();
-    final hari = local.day.toString().padLeft(2, '0');
-    final bulan = local.month.toString().padLeft(2, '0');
-    final tahun = local.year;
-    final jam = local.hour.toString().padLeft(2, '0');
-    final menit = local.minute.toString().padLeft(2, '0');
+    final hari = tanggal.day.toString().padLeft(2, '0');
+    final bulan = tanggal.month.toString().padLeft(2, '0');
+    final tahun = tanggal.year;
+    final jam = tanggal.hour.toString().padLeft(2, '0');
+    final menit = tanggal.minute.toString().padLeft(2, '0');
 
     return '$hari/$bulan/$tahun • $jam:$menit';
   }
+
+  // ==========================================
+  // PESAN
+  // ==========================================
 
   void showMessage(String message, {bool error = false}) {
     if (!mounted) return;
@@ -198,7 +378,10 @@ class _VerifikasiSetoranScreenState
     );
   }
 
-  // MEMBUKA HALAMAN DETAIL VERIFIKASI
+  // ==========================================
+  // MEMBUKA DETAIL VERIFIKASI
+  // ==========================================
+
   Future<void> _bukaDetailVerifikasi(
     Map<String, dynamic> data,
   ) async {
@@ -214,7 +397,7 @@ class _VerifikasiSetoranScreenState
       return;
     }
 
-    final hasil = await Navigator.push(
+    await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => DetailVerifikasiScreen(
@@ -225,12 +408,26 @@ class _VerifikasiSetoranScreenState
 
     if (!mounted) return;
 
-    // MUAT ULANG DATA SETELAH KEMBALI DARI HALAMAN DETAIL
     await loadData();
   }
 
+  // ==========================================
+  // BUILD
+  // ==========================================
+
   @override
   Widget build(BuildContext context) {
+    final dataHalaman = paginatedData;
+
+    final totalData = filteredData.length;
+
+    final nomorAwal = totalData == 0
+        ? 0
+        : ((currentPage - 1) * _itemsPerPage) + 1;
+
+    final nomorAkhir =
+        (currentPage * _itemsPerPage).clamp(0, totalData);
+
     return Scaffold(
       backgroundColor: background,
       body: SafeArea(
@@ -255,6 +452,8 @@ class _VerifikasiSetoranScreenState
                       _statistics(),
                       const SizedBox(height: 12),
                       _searchBar(),
+                      const SizedBox(height: 9),
+                      _filterBar(),
                       const SizedBox(height: 13),
 
                       if (isLoading)
@@ -268,12 +467,26 @@ class _VerifikasiSetoranScreenState
                         )
                       else if (errorMessage != null)
                         _errorView()
-                      else if (filteredData.isEmpty)
+                      else if (totalData == 0)
                         _emptyView()
-                      else
-                        ...filteredData.map(
+                      else ...[
+                        _resultHeader(
+                          nomorAwal,
+                          nomorAkhir,
+                          totalData,
+                        ),
+                        const SizedBox(height: 9),
+
+                        // MAKSIMAL 10 KARTU
+                        ...dataHalaman.map(
                           (data) => _verificationCard(data),
                         ),
+
+                        const SizedBox(height: 5),
+
+                        // NAVIGASI HALAMAN
+                        _pagination(),
+                      ],
                     ],
                   ),
                 ),
@@ -285,7 +498,10 @@ class _VerifikasiSetoranScreenState
     );
   }
 
+  // ==========================================
   // HEADER
+  // ==========================================
+
   Widget _header() {
     return Container(
       width: double.infinity,
@@ -351,7 +567,10 @@ class _VerifikasiSetoranScreenState
     );
   }
 
+  // ==========================================
   // STATISTIK
+  // ==========================================
+
   Widget _statistics() {
     return Row(
       children: [
@@ -370,7 +589,9 @@ class _VerifikasiSetoranScreenState
             icon: Icons.verified_rounded,
             iconColor: const Color(0xFF159B69),
             title: 'Hari ini',
-            value: isLoading ? '-' : '$jumlahDisetujuiHariIni',
+            value: isLoading
+                ? '-'
+                : '$jumlahDisetujuiHariIni',
             subtitle: 'Disetujui',
           ),
         ),
@@ -450,7 +671,10 @@ class _VerifikasiSetoranScreenState
     );
   }
 
+  // ==========================================
   // SEARCH BAR
+  // ==========================================
+
   Widget _searchBar() {
     return Container(
       height: 42,
@@ -471,7 +695,7 @@ class _VerifikasiSetoranScreenState
           Expanded(
             child: TextField(
               controller: searchController,
-              onChanged: (_) => setState(() {}),
+              onChanged: (_) => _resetHalaman(),
               style: const TextStyle(
                 fontSize: 12,
                 color: ink,
@@ -491,7 +715,7 @@ class _VerifikasiSetoranScreenState
             IconButton(
               onPressed: () {
                 searchController.clear();
-                setState(() {});
+                _resetHalaman();
               },
               icon: const Icon(
                 Icons.close_rounded,
@@ -509,7 +733,252 @@ class _VerifikasiSetoranScreenState
     );
   }
 
+  // ==========================================
+  // FILTER TANGGAL DAN SORTING
+  // ==========================================
+
+  Widget _filterBar() {
+    return Row(
+      children: [
+        Expanded(
+          child: _dropdownFilter(
+            label: 'Tanggal',
+            value: selectedDateFilter,
+            items: const [
+              'Semua',
+              'Hari ini',
+              'Minggu ini',
+              'Bulan ini',
+            ],
+            icon: Icons.calendar_month_outlined,
+            onChanged: (value) {
+              setState(() {
+                selectedDateFilter = value;
+                currentPage = 1;
+              });
+            },
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _dropdownFilter(
+            label: 'Urutkan',
+            value: selectedSort,
+            items: const [
+              'Terbaru',
+              'Terlama',
+              'Berat tertinggi',
+              'Berat terendah',
+            ],
+            icon: Icons.sort_rounded,
+            onChanged: (value) {
+              setState(() {
+                selectedSort = value;
+                currentPage = 1;
+              });
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _dropdownFilter({
+    required String label,
+    required String value,
+    required List<String> items,
+    required IconData icon,
+    required ValueChanged<String> onChanged,
+  }) {
+    return Container(
+      height: 43,
+      padding: const EdgeInsets.symmetric(horizontal: 9),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: border),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            icon,
+            size: 15,
+            color: green,
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: value,
+                isExpanded: true,
+                icon: const Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  size: 17,
+                  color: muted,
+                ),
+                style: const TextStyle(
+                  fontSize: 10,
+                  color: ink,
+                  fontWeight: FontWeight.w600,
+                ),
+                items: items.map((item) {
+                  return DropdownMenuItem<String>(
+                    value: item,
+                    child: Text(
+                      item,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  );
+                }).toList(),
+                onChanged: (newValue) {
+                  if (newValue != null) {
+                    onChanged(newValue);
+                  }
+                },
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ==========================================
+  // HEADER JUMLAH HASIL
+  // ==========================================
+
+  Widget _resultHeader(
+    int awal,
+    int akhir,
+    int total,
+  ) {
+    return Row(
+      children: [
+        const Icon(
+          Icons.list_alt_rounded,
+          size: 17,
+          color: green,
+        ),
+        const SizedBox(width: 6),
+        const Expanded(
+          child: Text(
+            'Daftar Menunggu Verifikasi',
+            style: TextStyle(
+              fontSize: 12,
+              color: ink,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+        Text(
+          '$awal-$akhir dari $total data',
+          style: const TextStyle(
+            fontSize: 10,
+            color: muted,
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ==========================================
+  // PAGINATION
+  // ==========================================
+
+  Widget _pagination() {
+    final pages = totalPages;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 10,
+        vertical: 10,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: border),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              'Halaman $currentPage dari $pages',
+              style: const TextStyle(
+                fontSize: 10,
+                color: muted,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          _pageButton(
+            icon: Icons.chevron_left_rounded,
+            enabled: currentPage > 1,
+            onTap: () => _ubahHalaman(currentPage - 1),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            width: 32,
+            height: 32,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: green,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              '$currentPage',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          _pageButton(
+            icon: Icons.chevron_right_rounded,
+            enabled: currentPage < pages,
+            onTap: () => _ubahHalaman(currentPage + 1),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _pageButton({
+    required IconData icon,
+    required bool enabled,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: enabled ? onTap : null,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        width: 32,
+        height: 32,
+        decoration: BoxDecoration(
+          color: enabled
+              ? const Color(0xFFE7F3ED)
+              : const Color(0xFFF1F3F5),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: enabled
+                ? const Color(0xFFC8E3D3)
+                : border,
+          ),
+        ),
+        child: Icon(
+          icon,
+          size: 20,
+          color: enabled ? green : const Color(0xFFB8C0BC),
+        ),
+      ),
+    );
+  }
+
+  // ==========================================
   // ERROR
+  // ==========================================
+
   Widget _errorView() {
     return Container(
       width: double.infinity,
@@ -562,46 +1031,76 @@ class _VerifikasiSetoranScreenState
     );
   }
 
+  // ==========================================
   // DATA KOSONG
+  // ==========================================
+
   Widget _emptyView() {
+    final sedangMencari =
+        searchController.text.trim().isNotEmpty ||
+        selectedDateFilter != 'Semua';
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(
         horizontal: 20,
         vertical: 35,
       ),
-      child: const Column(
+      child: Column(
         children: [
-          Icon(
+          const Icon(
             Icons.inbox_outlined,
             size: 48,
             color: Color(0xFFB6C4BC),
           ),
-          SizedBox(height: 10),
+          const SizedBox(height: 10),
           Text(
-            'Belum Ada Setoran Menunggu',
-            style: TextStyle(
+            sedangMencari
+                ? 'Data Tidak Ditemukan'
+                : 'Belum Ada Setoran Menunggu',
+            style: const TextStyle(
               fontSize: 13,
               color: ink,
               fontWeight: FontWeight.bold,
             ),
           ),
-          SizedBox(height: 5),
+          const SizedBox(height: 5),
           Text(
-            'Setoran dari akun kelas akan muncul di sini '
-            'setelah berhasil dikirim.',
+            sedangMencari
+                ? 'Coba ubah kata pencarian atau filter.'
+                : 'Setoran dari akun kelas akan muncul di sini '
+                    'setelah berhasil dikirim.',
             textAlign: TextAlign.center,
-            style: TextStyle(
+            style: const TextStyle(
               fontSize: 11,
               color: muted,
             ),
           ),
+          if (sedangMencari) ...[
+            const SizedBox(height: 12),
+            TextButton.icon(
+              onPressed: () {
+                searchController.clear();
+
+                setState(() {
+                  selectedDateFilter = 'Semua';
+                  selectedSort = 'Terbaru';
+                  currentPage = 1;
+                });
+              },
+              icon: const Icon(Icons.restart_alt, size: 16),
+              label: const Text('Reset pencarian dan filter'),
+            ),
+          ],
         ],
       ),
     );
   }
 
+  // ==========================================
   // KARTU VERIFIKASI
+  // ==========================================
+
   Widget _verificationCard(Map<String, dynamic> data) {
     final detail = List<Map<String, dynamic>>.from(
       data['detail'] ?? [],
@@ -846,7 +1345,7 @@ class _VerifikasiSetoranScreenState
 
           const SizedBox(height: 9),
 
-          // LANGSUNG BUKA HALAMAN DETAIL, TANPA MODAL
+          // TOMBOL DETAIL VERIFIKASI
           SizedBox(
             width: double.infinity,
             height: 37,

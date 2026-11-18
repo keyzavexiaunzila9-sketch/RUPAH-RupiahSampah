@@ -81,6 +81,8 @@ class _FormSetorSampahScreenState
   // ==========================================
 
   Future<void> muatDataAwal() async {
+    if (!mounted) return;
+
     setState(() {
       isLoadingData = true;
       errorMemuat = null;
@@ -90,10 +92,11 @@ class _FormSetorSampahScreenState
       final user = supabase.auth.currentUser;
 
       if (user == null) {
-        throw Exception('Akun belum login. Silakan login kembali.');
+        throw Exception(
+          'Akun belum login. Silakan login kembali.',
+        );
       }
 
-      // Mengambil sampah yang statusnya aktif.
       final responseSampah = await supabase
           .from('sampah')
           .select(
@@ -105,7 +108,6 @@ class _FormSetorSampahScreenState
       final sampah =
           List<Map<String, dynamic>>.from(responseSampah);
 
-      // Mengambil kelas milik user yang sedang login.
       final responseUser = await supabase
           .from('users')
           .select('id_kelas')
@@ -214,19 +216,25 @@ class _FormSetorSampahScreenState
     }
 
     if (selectedSampah == null) {
-      tampilkanPesan('Pilih jenis sampah terlebih dahulu.');
+      tampilkanPesan(
+        'Pilih jenis sampah terlebih dahulu.',
+      );
       return;
     }
 
     if (photoBytes == null) {
-      tampilkanPesan('Ambil foto bukti setoran terlebih dahulu.');
+      tampilkanPesan(
+        'Ambil foto bukti setoran terlebih dahulu.',
+      );
       return;
     }
 
     final user = supabase.auth.currentUser;
 
     if (user == null) {
-      tampilkanPesan('Sesi login tidak ditemukan. Silakan login ulang.');
+      tampilkanPesan(
+        'Sesi login tidak ditemukan. Silakan login ulang.',
+      );
       return;
     }
 
@@ -245,7 +253,8 @@ class _FormSetorSampahScreenState
     bool fotoTerunggah = false;
 
     try {
-      // 1. Upload foto ke Storage.
+      // 1. UPLOAD FOTO KE SUPABASE STORAGE.
+
       await supabase.storage
           .from('bukti-setoran')
           .uploadBinary(
@@ -259,16 +268,37 @@ class _FormSetorSampahScreenState
 
       fotoTerunggah = true;
 
-      // 2. Simpan data utama ke tabel setoran.
+      // 2. MENENTUKAN TANGGAL DAN WAKTU SETORAN.
+      //
+      // Tanggal mengikuti tanggal yang dipilih user.
+      // Jam mengikuti waktu saat tombol kirim ditekan.
+
+      final sekarang = DateTime.now();
+
+      final tanggalSetoran = DateTime(
+        selectedDate.year,
+        selectedDate.month,
+        selectedDate.day,
+        sekarang.hour,
+        sekarang.minute,
+        sekarang.second,
+        sekarang.millisecond,
+        sekarang.microsecond,
+      );
+
+      // ISO 8601 menyertakan offset zona waktu lokal.
+      // Supabase akan menyimpan timestamp dengan konversi
+      // yang sesuai ke UTC.
+
+      final tanggalIso = tanggalSetoran.toIso8601String();
+
+      // 3. SIMPAN DATA UTAMA KE TABEL SETORAN.
+
       final hasilSetoran = await supabase
           .from('setoran')
           .insert({
             'id_user': uid,
-            'tanggal': DateTime(
-              selectedDate.year,
-              selectedDate.month,
-              selectedDate.day,
-            ).toUtc().toIso8601String(),
+            'tanggal': tanggalIso,
             'status': 'menunggu',
             'total_berat': weight,
             'total_nilai': estimasiNilai,
@@ -280,9 +310,11 @@ class _FormSetorSampahScreenState
           .select('id_setoran')
           .single();
 
-      idSetoran = (hasilSetoran['id_setoran'] as num).toInt();
+      idSetoran =
+          (hasilSetoran['id_setoran'] as num).toInt();
 
-      // 3. Simpan detail dan hubungkan dengan setoran.
+      // 4. SIMPAN DETAIL SETORAN.
+
       await supabase.from('detail_setoran').insert({
         'id_setoran': idSetoran,
         'id_sampah': selectedSampah!['id_sampah'],
@@ -291,7 +323,8 @@ class _FormSetorSampahScreenState
 
       if (!mounted) return;
 
-      // 4. Pindah ke halaman status dengan membawa ID setoran.
+      // 5. PINDAH KE HALAMAN STATUS SETORAN.
+
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -305,7 +338,8 @@ class _FormSetorSampahScreenState
         ),
       );
     } catch (e) {
-      // Membersihkan data jika penyimpanan detail gagal.
+      // MEMBERSIHKAN DATA JIKA TERJADI KEGAGALAN.
+
       try {
         if (idSetoran != null) {
           await supabase
@@ -320,7 +354,7 @@ class _FormSetorSampahScreenState
               .remove([fotoPath]);
         }
       } catch (_) {
-        // Jika pembersihan ditolak RLS, error utama tetap ditampilkan.
+        // Error utama tetap ditampilkan.
       }
 
       if (!mounted) return;
@@ -371,7 +405,10 @@ class _FormSetorSampahScreenState
             ),
             const Text(
               'BANK SAMPAH DIGITAL',
-              style: TextStyle(fontSize: 12, color: muted),
+              style: TextStyle(
+                fontSize: 12,
+                color: muted,
+              ),
             ),
           ],
         ),
@@ -381,7 +418,9 @@ class _FormSetorSampahScreenState
         ),
       ),
       body: isLoadingData
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(
+              child: CircularProgressIndicator(),
+            )
           : errorMemuat != null
               ? _tampilanError()
               : daftarSampah.isEmpty
@@ -414,7 +453,10 @@ class _FormSetorSampahScreenState
             Text(
               errorMemuat!,
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 12, color: muted),
+              style: const TextStyle(
+                fontSize: 12,
+                color: muted,
+              ),
             ),
             const SizedBox(height: 12),
             OutlinedButton(
@@ -525,7 +567,10 @@ class _FormSetorSampahScreenState
                 Expanded(
                   child: Text(
                     namaKelas,
-                    style: const TextStyle(fontSize: 12, color: ink),
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: ink,
+                    ),
                   ),
                 ),
                 const Icon(
@@ -577,7 +622,10 @@ class _FormSetorSampahScreenState
               _label('Kategori Sampah'),
               const Text(
                 'Mengikuti data sampah',
-                style: TextStyle(fontSize: 12, color: muted),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: muted,
+                ),
               ),
             ],
           ),
@@ -597,7 +645,10 @@ class _FormSetorSampahScreenState
                 Expanded(
                   child: Text(
                     selectedSampah?['kategori']?.toString() ?? '-',
-                    style: const TextStyle(fontSize: 12, color: ink),
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: ink,
+                    ),
                   ),
                 ),
               ],
@@ -639,7 +690,10 @@ class _FormSetorSampahScreenState
                           const SizedBox(width: 7),
                           const Text(
                             'Kg',
-                            style: TextStyle(fontSize: 12, color: ink),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: ink,
+                            ),
                           ),
                         ],
                       ),
@@ -670,7 +724,10 @@ class _FormSetorSampahScreenState
                       const Expanded(
                         child: Text(
                           'Estimasi Reward:',
-                          style: TextStyle(fontSize: 12, color: ink),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: ink,
+                          ),
                         ),
                       ),
                       Column(
@@ -824,7 +881,10 @@ class _FormSetorSampahScreenState
                   Expanded(
                     child: Text(
                       formattedDate,
-                      style: const TextStyle(fontSize: 12, color: ink),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: ink,
+                      ),
                     ),
                   ),
                   const Icon(
@@ -875,7 +935,10 @@ class _FormSetorSampahScreenState
                           color: Colors.white,
                         ),
                       )
-                    : const Icon(Icons.send_rounded, size: 13),
+                    : const Icon(
+                        Icons.send_rounded,
+                        size: 13,
+                      ),
                 label: Text(
                   isSaving ? 'Menyimpan...' : 'Kirim Setoran',
                   style: const TextStyle(
@@ -899,10 +962,6 @@ class _FormSetorSampahScreenState
       ),
     );
   }
-
-  // ==========================================
-  // KOMPONEN TAMPILAN
-  // ==========================================
 
   Widget _label(String text) {
     return Padding(
@@ -969,7 +1028,10 @@ class _FormSetorSampahScreenState
   InputDecoration _inputDecoration({required String hint}) {
     return InputDecoration(
       hintText: hint,
-      hintStyle: const TextStyle(fontSize: 12, color: muted),
+      hintStyle: const TextStyle(
+        fontSize: 12,
+        color: muted,
+      ),
       filled: true,
       fillColor: Colors.white,
       contentPadding: const EdgeInsets.symmetric(

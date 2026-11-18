@@ -75,9 +75,7 @@ class StatusSetorScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // =====================================
-            // STATUS BERHASIL
-            // =====================================
+          
 
             Center(
               child: Column(
@@ -145,10 +143,6 @@ class StatusSetorScreen extends StatelessWidget {
             ),
 
             const SizedBox(height: 22),
-
-            // =====================================
-            // RINGKASAN SETORAN
-            // =====================================
 
             Container(
               width: double.infinity,
@@ -223,10 +217,6 @@ class StatusSetorScreen extends StatelessWidget {
 
             const SizedBox(height: 18),
 
-            // =====================================
-            // PROSES VERIFIKASI
-            // =====================================
-
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(16),
@@ -276,10 +266,6 @@ class StatusSetorScreen extends StatelessWidget {
 
             const SizedBox(height: 18),
 
-            // =====================================
-            // TOMBOL DETAIL SETORAN
-            // =====================================
-
             RupahPrimaryButton(
               label: 'Lihat Detail Setoran',
               icon: Icons.arrow_forward_rounded,
@@ -287,10 +273,6 @@ class StatusSetorScreen extends StatelessWidget {
             ),
 
             const SizedBox(height: 9),
-
-            // =====================================
-            // TOMBOL KEMBALI DASHBOARD
-            // =====================================
 
             RupahPrimaryButton(
               label: 'Kembali ke Dashboard',
@@ -303,10 +285,6 @@ class StatusSetorScreen extends StatelessWidget {
       ),
     );
   }
-
-  // =====================================
-  // BARIS INFORMASI
-  // =====================================
 
   Widget _detailRow(String title, String value) {
     return Padding(
@@ -342,10 +320,6 @@ class StatusSetorScreen extends StatelessWidget {
       ),
     );
   }
-
-  // =====================================
-  // TIMELINE VERIFIKASI
-  // =====================================
 
   Widget _timeline(
     String title,

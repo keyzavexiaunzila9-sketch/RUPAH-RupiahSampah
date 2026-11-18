@@ -24,7 +24,7 @@ class _LoginScreenState extends State<LoginScreen> {
   bool obscure = true;
   bool isLoading = false;
 
-  // URL backend RUPAH
+  // URL BACKEND RUPAH
   final String baseUrl = 'http://localhost:3000';
 
   @override
@@ -34,92 +34,147 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  // MENAMPILKAN NOTIFIKASI
+  void _showMessage(
+    String message, {
+    bool error = false,
+  }) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          message,
+          style: GoogleFonts.dmSans(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: Colors.white,
+          ),
+        ),
+        backgroundColor: error
+            ? const Color(0xFFD93636)
+            : const Color(0xFF087A4F),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 3),
+        margin: const EdgeInsets.all(15),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+        ),
+      ),
+    );
+  }
+
+  // PROSES LOGIN
   Future<void> _login() async {
-    final username = usernameController.text.trim().toLowerCase();
+    final username =
+        usernameController.text.trim().toLowerCase();
+
     final password = passwordController.text;
 
+    // VALIDASI INPUT
     if (username.isEmpty || password.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Username dan password wajib diisi.'),
-        ),
+      _showMessage(
+        'Username dan password wajib diisi.',
+        error: true,
       );
       return;
     }
+
+    if (isLoading) return;
 
     setState(() {
       isLoading = true;
     });
 
     try {
-      // 1. Mencari email berdasarkan username melalui backend
-      final lookupResponse = await http.post(
-        Uri.parse('$baseUrl/api/auth/username-email'),
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({
-          'username': username,
-        }),
-      );
+      // 1. MENCARI EMAIL BERDASARKAN USERNAME
+      final lookupResponse = await http
+          .post(
+            Uri.parse('$baseUrl/api/auth/username-email'),
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode({
+              'username': username,
+            }),
+          )
+          .timeout(
+            const Duration(seconds: 15),
+          );
 
-      final lookupData = jsonDecode(lookupResponse.body);
+      // MEMBACA RESPONSE BACKEND
+      final dynamic lookupData =
+          jsonDecode(lookupResponse.body);
 
       if (lookupResponse.statusCode != 200) {
         throw Exception(
-          lookupData['message'] ?? 'Username tidak ditemukan.',
+          'Username atau password salah.',
         );
       }
 
-      final email = lookupData['email'];
-
-      if (email == null || email.toString().isEmpty) {
-        throw Exception('Email akun tidak ditemukan.');
+      if (lookupData is! Map ||
+          lookupData['email'] == null ||
+          lookupData['email'].toString().isEmpty) {
+        throw Exception(
+          'Username atau password salah.',
+        );
       }
 
-      // 2. Login ke Supabase Auth
+      final String email =
+          lookupData['email'].toString();
+
+      // 2. LOGIN MENGGUNAKAN SUPABASE AUTH
       final supabase = Supabase.instance.client;
 
-      final response = await supabase.auth.signInWithPassword(
-        email: email.toString(),
+      final response =
+          await supabase.auth.signInWithPassword(
+        email: email,
         password: password,
       );
 
       final user = response.user;
 
       if (user == null) {
-        throw Exception('Akun tidak ditemukan.');
+        throw Exception(
+          'Username atau password salah.',
+        );
       }
 
-      // 3. Mengambil data role pengguna
+      // 3. MENGAMBIL DATA ROLE PENGGUNA
       final data = await supabase
           .from('users')
           .select('username, role, id_kelas')
           .eq('id_user', user.id)
           .maybeSingle();
 
+      // JIKA DATA PENGGUNA TIDAK DITEMUKAN
       if (data == null) {
         await supabase.auth.signOut();
-        throw Exception('Data pengguna tidak ditemukan.');
+
+        throw Exception(
+          'Data pengguna tidak ditemukan.',
+        );
       }
 
       if (!mounted) return;
 
-      // 4. Mengarahkan pengguna berdasarkan role
+      // 4. NAVIGASI BERDASARKAN ROLE
       final role = data['role'];
 
       if (role == 'admin') {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder: (context) => const AdminNavigation(),
+            builder: (_) => const AdminNavigation(),
           ),
         );
       } else if (role == 'user') {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder: (context) => const UserNavigation(),
+            builder: (_) => const UserNavigation(),
           ),
         );
       } else {
@@ -127,29 +182,44 @@ class _LoginScreenState extends State<LoginScreen> {
 
         if (!mounted) return;
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Role pengguna tidak valid.'),
-          ),
+        throw Exception(
+          'Role pengguna tidak valid.',
         );
       }
-    } on AuthException catch (e) {
-      if (!mounted) return;
+    }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Login gagal: ${e.message}'),
-        ),
+    // ERROR AUTENTIKASI SUPABASE
+    on AuthException {
+      _showMessage(
+        'Username atau password salah.',
+        error: true,
+      );
+    }
+
+    // ERROR DARI BACKEND ATAU VALIDASI
+    on http.ClientException {
+      _showMessage(
+        'Tidak dapat terhubung ke server.',
+        error: true,
+      );
+    } on FormatException {
+      _showMessage(
+        'Terjadi kesalahan saat membaca respons server.',
+        error: true,
+      );
+    } on Exception catch (e) {
+      final message = e
+          .toString()
+          .replaceFirst('Exception: ', '');
+
+      _showMessage(
+        message,
+        error: true,
       );
     } catch (e) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Login gagal: ${e.toString().replaceFirst('Exception: ', '')}',
-          ),
-        ),
+      _showMessage(
+        'Terjadi kesalahan. Silakan coba lagi.',
+        error: true,
       );
     } finally {
       if (mounted) {
@@ -165,7 +235,7 @@ class _LoginScreenState extends State<LoginScreen> {
     return Scaffold(
       body: Stack(
         children: [
-          // Background gradient
+          // BACKGROUND GRADIENT
           Container(
             decoration: const BoxDecoration(
               gradient: LinearGradient(
@@ -179,7 +249,7 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ),
 
-          // Lingkaran dekorasi atas
+          // LINGKARAN DEKORASI ATAS
           Positioned(
             top: -90,
             left: -70,
@@ -187,13 +257,15 @@ class _LoginScreenState extends State<LoginScreen> {
               width: 250,
               height: 250,
               decoration: BoxDecoration(
-                color: RupahColors.green.withValues(alpha: 0.55),
+                color: RupahColors.green.withValues(
+                  alpha: 0.55,
+                ),
                 shape: BoxShape.circle,
               ),
             ),
           ),
 
-          // Lingkaran dekorasi bawah
+          // LINGKARAN DEKORASI BAWAH
           Positioned(
             bottom: -100,
             right: -70,
@@ -201,7 +273,9 @@ class _LoginScreenState extends State<LoginScreen> {
               width: 250,
               height: 250,
               decoration: BoxDecoration(
-                color: RupahColors.green.withValues(alpha: 0.55),
+                color: RupahColors.green.withValues(
+                  alpha: 0.55,
+                ),
                 shape: BoxShape.circle,
               ),
             ),
@@ -219,10 +293,12 @@ class _LoginScreenState extends State<LoginScreen> {
                     maxWidth: 430,
                   ),
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    crossAxisAlignment:
+                        CrossAxisAlignment.stretch,
                     children: [
                       const SizedBox(height: 70),
 
+                      // JUDUL
                       Text(
                         'Selamat Datang 👋',
                         style: GoogleFonts.dmSans(
@@ -245,7 +321,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                       const SizedBox(height: 24),
 
-                      // Username
+                      // INPUT USERNAME
                       _field(
                         'Username',
                         usernameController,
@@ -253,7 +329,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                       const SizedBox(height: 14),
 
-                      // Password
+                      // INPUT PASSWORD
                       _field(
                         'Password',
                         passwordController,
@@ -262,26 +338,33 @@ class _LoginScreenState extends State<LoginScreen> {
 
                       const SizedBox(height: 24),
 
-                      // Tombol login
+                      // TOMBOL LOGIN
                       SizedBox(
                         height: 52,
                         child: FilledButton(
-                          onPressed: isLoading ? null : _login,
+                          onPressed:
+                              isLoading ? null : _login,
                           style: FilledButton.styleFrom(
-                            backgroundColor: RupahColors.green,
-                            foregroundColor: RupahColors.white,
+                            backgroundColor:
+                                RupahColors.green,
+                            foregroundColor:
+                                RupahColors.white,
                             disabledBackgroundColor:
-                                RupahColors.green.withValues(alpha: 0.7),
+                                RupahColors.green.withValues(
+                              alpha: 0.7,
+                            ),
                             elevation: 0,
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
+                              borderRadius:
+                                  BorderRadius.circular(8),
                             ),
                           ),
                           child: isLoading
                               ? const SizedBox(
                                   width: 22,
                                   height: 22,
-                                  child: CircularProgressIndicator(
+                                  child:
+                                      CircularProgressIndicator(
                                     color: Colors.white,
                                     strokeWidth: 2,
                                   ),
@@ -290,7 +373,8 @@ class _LoginScreenState extends State<LoginScreen> {
                                   'Login',
                                   style: GoogleFonts.dmSans(
                                     fontSize: 14,
-                                    fontWeight: FontWeight.w700,
+                                    fontWeight:
+                                        FontWeight.w700,
                                   ),
                                 ),
                         ),
@@ -298,12 +382,15 @@ class _LoginScreenState extends State<LoginScreen> {
 
                       const SizedBox(height: 18),
 
+                      // KETERANGAN APLIKASI
                       Text(
                         'Aplikasi pengelolaan sampah kelas dan sekolah',
                         textAlign: TextAlign.center,
                         style: GoogleFonts.dmSans(
                           fontSize: 11,
-                          color: Colors.white.withValues(alpha: 0.82),
+                          color: Colors.white.withValues(
+                            alpha: 0.82,
+                          ),
                         ),
                       ),
                     ],
@@ -317,6 +404,7 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  // WIDGET INPUT
   Widget _field(
     String label,
     TextEditingController controller, {
@@ -329,7 +417,9 @@ class _LoginScreenState extends State<LoginScreen> {
         borderRadius: BorderRadius.circular(8),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.18),
+            color: Colors.black.withValues(
+              alpha: 0.18,
+            ),
             blurRadius: 4,
             offset: const Offset(0, 2),
           ),

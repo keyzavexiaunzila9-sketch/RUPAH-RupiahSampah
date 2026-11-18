@@ -35,10 +35,12 @@ class _DashboardScreensState extends State<DashboardScreens> {
 
   // MENGAMBIL DATA DASHBOARD DARI SUPABASE
   Future<void> loadDashboard() async {
-    setState(() {
-      sedangMemuat = true;
-      pesanError = null;
-    });
+    if (mounted) {
+      setState(() {
+        sedangMemuat = true;
+        pesanError = null;
+      });
+    }
 
     try {
       final user = supabase.auth.currentUser;
@@ -58,51 +60,92 @@ class _DashboardScreensState extends State<DashboardScreens> {
         throw Exception('Data akun tidak ditemukan.');
       }
 
-      // 2. Mengambil nama kelas
       final idKelas = dataUser['id_kelas'];
 
-      if (idKelas != null) {
-        final dataKelas = await supabase
-            .from('kelas')
-            .select('nama_kelas')
-            .eq('id_kelas', idKelas)
-            .maybeSingle();
-
-        namaKelas = dataKelas?['nama_kelas'] ?? 'Kelas belum terdaftar';
-      } else {
-        namaKelas = 'Kelas belum terdaftar';
+      if (idKelas == null) {
+        throw Exception('Akun belum terdaftar di kelas.');
       }
 
-      // 3. Mengambil seluruh setoran milik akun kelas
-      final dataSetoran = await supabase
-          .from('setoran')
-          .select('total_berat, total_nilai, status')
-          .eq('id_user', user.id);
+      // 2. Mengambil nama kelas
+      final dataKelas = await supabase
+          .from('kelas')
+          .select('nama_kelas')
+          .eq('id_kelas', idKelas)
+          .maybeSingle();
+
+      final hasilNamaKelas =
+          dataKelas?['nama_kelas'] ?? 'Kelas belum terdaftar';
+
+      // 3. Mengambil seluruh anggota kelas
+      final dataAnggota = await supabase
+          .from('users')
+          .select('id_user')
+          .eq('id_kelas', idKelas);
+
+      final List<String> idUserKelas = dataAnggota
+          .map<String>((item) => item['id_user'].toString())
+          .toList();
 
       double beratTerkumpul = 0;
       double saldoTerkumpul = 0;
-      int jumlahSetoran = dataSetoran.length;
+      double totalPenarikan = 0;
+      int jumlahSetoran = 0;
 
-      // 4. Menghitung hanya setoran yang disetujui
-      for (final item in dataSetoran) {
-        final status = (item['status'] ?? '')
-            .toString()
-            .toLowerCase()
-            .trim();
+      // 4. Mengambil seluruh setoran anggota kelas
+      if (idUserKelas.isNotEmpty) {
+        final dataSetoran = await supabase
+            .from('setoran')
+            .select('total_berat, total_nilai, status')
+            .inFilter('id_user', idUserKelas);
 
-        if (status == 'disetujui') {
-          beratTerkumpul +=
-              double.tryParse(item['total_berat'].toString()) ?? 0;
+        jumlahSetoran = dataSetoran.length;
 
-          saldoTerkumpul +=
-              double.tryParse(item['total_nilai'].toString()) ?? 0;
+        // Menghitung setoran yang sudah disetujui
+        for (final item in dataSetoran) {
+          final status = (item['status'] ?? '')
+              .toString()
+              .toLowerCase()
+              .trim();
+
+          if (status == 'disetujui') {
+            beratTerkumpul +=
+                double.tryParse(
+                  item['total_berat']?.toString() ?? '',
+                ) ??
+                0;
+
+            saldoTerkumpul +=
+                double.tryParse(
+                  item['total_nilai']?.toString() ?? '',
+                ) ??
+                0;
+          }
         }
       }
+
+      // 5. Mengambil seluruh penarikan kas kelas
+      final dataPenarikan = await supabase
+          .from('penarikan_kas')
+          .select('nominal')
+          .eq('id_kelas', idKelas);
+
+      // Menjumlahkan nominal penarikan
+      for (final item in dataPenarikan) {
+        totalPenarikan +=
+            double.tryParse(
+              item['nominal']?.toString() ?? '',
+            ) ??
+            0;
+      }
+
+      // 6. Menghitung saldo akhir kelas
+      final saldoAkhir = saldoTerkumpul - totalPenarikan;
 
       if (!mounted) return;
 
       setState(() {
-        saldoKelas = formatRupiah(saldoTerkumpul);
+        namaKelas = hasilNamaKelas;
+        saldoKelas = formatRupiah(saldoAkhir);
         totalSampah = '${formatAngka(beratTerkumpul)} Kg';
         totalSetoran = '$jumlahSetoran Setoran';
         sedangMemuat = false;
@@ -216,10 +259,10 @@ class _DashboardScreensState extends State<DashboardScreens> {
                           size: 20,
                         ),
                         const SizedBox(width: 8),
-                        Expanded(
+                        const Expanded(
                           child: Text(
                             'Gagal memuat data. Tarik layar ke bawah untuk mencoba lagi.',
-                            style: const TextStyle(
+                            style: TextStyle(
                               color: Colors.red,
                               fontSize: 11,
                             ),

@@ -6,6 +6,7 @@ import '../widgets/admin_navigation.dart';
 import '../widgets/admin_widgets.dart';
 import 'rincian_penghasilan_screen.dart';
 import '../../core/services/verifikasi_service.dart';
+import '../../core/services/penarikan_service.dart';
 
 class RiwayatAdminScreen extends StatefulWidget {
   const RiwayatAdminScreen({super.key});
@@ -17,7 +18,8 @@ class RiwayatAdminScreen extends StatefulWidget {
 
 class _RiwayatAdminScreenState extends State<RiwayatAdminScreen> {
   final VerifikasiService _service = VerifikasiService();
-  final TextEditingController _searchController = TextEditingController();
+  final TextEditingController _searchController =
+      TextEditingController();
 
   int _tab = 0;
 
@@ -27,6 +29,7 @@ class _RiwayatAdminScreenState extends State<RiwayatAdminScreen> {
   List<Map<String, dynamic>> semuaSetoran = [];
   List<Map<String, dynamic>> semuaVerifikasi = [];
   List<Map<String, dynamic>> semuaUsers = [];
+  List<Map<String, dynamic>> semuaPenarikan = [];
 
   @override
   void initState() {
@@ -40,12 +43,38 @@ class _RiwayatAdminScreenState extends State<RiwayatAdminScreen> {
     super.dispose();
   }
 
+  // ==========================================
+  // KONVERSI WAKTU KE WIB
+  // ==========================================
+
+  DateTime? parseTanggalWib(dynamic value) {
+    if (value == null) return null;
+
+    try {
+      final tanggal = DateTime.parse(value.toString());
+
+      // Timestamp Supabase dikonversi ke UTC,
+      // kemudian ditambahkan 7 jam untuk WIB.
+      return tanggal.toUtc().add(
+        const Duration(hours: 7),
+      );
+    } catch (e) {
+      debugPrint('Gagal membaca tanggal: $e');
+      return null;
+    }
+  }
+
+  // ==========================================
   // MEMUAT DATA RIWAYAT
+  // ==========================================
+
   Future<void> loadRiwayat() async {
-    setState(() {
-      isLoading = true;
-      errorMessage = null;
-    });
+    if (mounted) {
+      setState(() {
+        isLoading = true;
+        errorMessage = null;
+      });
+    }
 
     try {
       final hasil = await Future.wait<dynamic>([
@@ -58,21 +87,48 @@ class _RiwayatAdminScreenState extends State<RiwayatAdminScreen> {
             .order('tanggal', ascending: false),
         Supabase.instance.client
             .from('users')
-            .select('id_user, username'),
+            .select('id_user, username, id_kelas'),
+        Supabase.instance.client
+            .from('penarikan_kas')
+            .select('id_kelas, nominal'),
       ]);
 
       if (!mounted) return;
 
+      final setoran = List<Map<String, dynamic>>.from(
+        hasil[0] as List,
+      );
+
+      final verifikasi = List<Map<String, dynamic>>.from(
+        hasil[1] as List,
+      );
+
+      final users = List<Map<String, dynamic>>.from(
+        hasil[2] as List,
+      );
+
+      final penarikan = List<Map<String, dynamic>>.from(
+        hasil[3] as List,
+      );
+
+      // Mencocokkan id_user pada setoran dengan id_kelas pada users.
+      for (final item in setoran) {
+        final user = users.where(
+          (u) =>
+              u['id_user']?.toString() ==
+              item['id_user']?.toString(),
+        );
+
+        if (user.isNotEmpty) {
+          item['id_kelas'] = user.first['id_kelas'];
+        }
+      }
+
       setState(() {
-        semuaSetoran =
-            List<Map<String, dynamic>>.from(hasil[0] as List);
-
-        semuaVerifikasi =
-            List<Map<String, dynamic>>.from(hasil[1] as List);
-
-        semuaUsers =
-            List<Map<String, dynamic>>.from(hasil[2] as List);
-
+        semuaSetoran = setoran;
+        semuaVerifikasi = verifikasi;
+        semuaUsers = users;
+        semuaPenarikan = penarikan;
         isLoading = false;
       });
     } catch (e) {
@@ -87,7 +143,10 @@ class _RiwayatAdminScreenState extends State<RiwayatAdminScreen> {
     }
   }
 
+  // ==========================================
   // FORMAT RUPIAH
+  // ==========================================
+
   String formatRupiah(double angka) {
     final nilai = angka.round().toString();
 
@@ -97,27 +156,36 @@ class _RiwayatAdminScreenState extends State<RiwayatAdminScreen> {
     )}';
   }
 
+  // ==========================================
   // FORMAT BERAT
+  // ==========================================
+
   String formatBerat(double angka) {
     return angka.toStringAsFixed(
       angka % 1 == 0 ? 0 : 1,
     );
   }
 
+  // ==========================================
   // KONVERSI ANGKA
+  // ==========================================
+
   double angka(dynamic value) {
     return double.tryParse(value?.toString() ?? '0') ?? 0;
   }
 
-  // FORMAT TANGGAL
+  // ==========================================
+  // FORMAT TANGGAL DAN JAM WIB
+  // ==========================================
+
   String formatTanggal(dynamic value) {
-    final tanggal = DateTime.tryParse(value?.toString() ?? '');
+    final tanggalLokal = parseTanggalWib(value);
 
-    if (tanggal == null) return '-';
+    if (tanggalLokal == null) return '-';
 
-    final sekarang = DateTime.now();
-
-    final tanggalLokal = tanggal.toLocal();
+    final sekarang = DateTime.now().toUtc().add(
+      const Duration(hours: 7),
+    );
 
     final jam =
         '${tanggalLokal.hour.toString().padLeft(2, '0')}:'
@@ -128,32 +196,56 @@ class _RiwayatAdminScreenState extends State<RiwayatAdminScreen> {
         tanggalLokal.month == sekarang.month &&
         tanggalLokal.day == sekarang.day;
 
-    final kemarin = sekarang.subtract(const Duration(days: 1));
+    final kemarin = sekarang.subtract(
+      const Duration(days: 1),
+    );
 
     final samaKemarin =
         tanggalLokal.year == kemarin.year &&
         tanggalLokal.month == kemarin.month &&
         tanggalLokal.day == kemarin.day;
 
-    final namaBulan = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
-      'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des',
+    const namaBulan = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'Mei',
+      'Jun',
+      'Jul',
+      'Agu',
+      'Sep',
+      'Okt',
+      'Nov',
+      'Des',
     ];
 
     final tanggalText =
-        '${tanggalLokal.day} ${namaBulan[tanggalLokal.month - 1]} '
+        '${tanggalLokal.day} '
+        '${namaBulan[tanggalLokal.month - 1]} '
         '${tanggalLokal.year}';
 
-    if (samaHariIni) return 'Hari ini, $jam WIB';
-    if (samaKemarin) return 'Kemarin, $jam WIB';
+    if (samaHariIni) {
+      return 'Hari ini, $jam WIB';
+    }
+
+    if (samaKemarin) {
+      return 'Kemarin, $jam WIB';
+    }
 
     return '$tanggalText • $jam WIB';
   }
 
+  // ==========================================
   // MENGAMBIL DATA VERIFIKASI TERBARU
+  // ==========================================
+
   Map<String, dynamic>? getVerifikasi(int idSetoran) {
+    // Data verifikasi sudah diurutkan dari terbaru ke terlama.
+    // Jadi data pertama yang cocok adalah verifikasi terbaru.
     for (final item in semuaVerifikasi) {
-      if (item['id_setoran'].toString() == idSetoran.toString()) {
+      if (item['id_setoran']?.toString() ==
+          idSetoran.toString()) {
         return item;
       }
     }
@@ -161,7 +253,32 @@ class _RiwayatAdminScreenState extends State<RiwayatAdminScreen> {
     return null;
   }
 
+  // ==========================================
+  // MENGAMBIL WAKTU RIWAYAT SETORAN
+  // ==========================================
+
+  dynamic getTanggalRiwayat(Map<String, dynamic> item) {
+    final idSetoran = int.tryParse(
+      item['id_setoran']?.toString() ?? '',
+    );
+
+    if (idSetoran != null) {
+      final verifikasi = getVerifikasi(idSetoran);
+
+      // Utamakan waktu admin melakukan verifikasi.
+      if (verifikasi?['tanggal'] != null) {
+        return verifikasi!['tanggal'];
+      }
+    }
+
+    // Jika belum ada tanggal verifikasi, gunakan tanggal setoran.
+    return item['tanggal'];
+  }
+
+  // ==========================================
   // MENGAMBIL NAMA VERIFIKATOR
+  // ==========================================
+
   String getNamaVerifikator(dynamic idAdmin) {
     if (idAdmin == null) return '-';
 
@@ -174,7 +291,10 @@ class _RiwayatAdminScreenState extends State<RiwayatAdminScreen> {
     return '-';
   }
 
-  // MENGAMBIL DATA RIWAYAT
+  // ==========================================
+  // RIWAYAT SETORAN
+  // ==========================================
+
   List<Map<String, dynamic>> get riwayatSetoran {
     final hasil = semuaSetoran.where((item) {
       final status = item['status']?.toString().toLowerCase();
@@ -182,15 +302,17 @@ class _RiwayatAdminScreenState extends State<RiwayatAdminScreen> {
       return status == 'disetujui' || status == 'ditolak';
     }).toList();
 
+    // Urutkan berdasarkan waktu verifikasi admin.
     hasil.sort((a, b) {
-      final tanggalA = DateTime.tryParse(
-        a['tanggal']?.toString() ?? '',
+      final tanggalA = parseTanggalWib(
+        getTanggalRiwayat(a),
       );
 
-      final tanggalB = DateTime.tryParse(
-        b['tanggal']?.toString() ?? '',
+      final tanggalB = parseTanggalWib(
+        getTanggalRiwayat(b),
       );
 
+      if (tanggalA == null && tanggalB == null) return 0;
       if (tanggalA == null) return 1;
       if (tanggalB == null) return -1;
 
@@ -216,25 +338,38 @@ class _RiwayatAdminScreenState extends State<RiwayatAdminScreen> {
     }).toList();
   }
 
-  // MENGHITUNG TOTAL KAS SEKOLAH
+  // ==========================================
+  // TOTAL KAS SEKOLAH (PENGHASILAN - PENARIKAN)
+  // ==========================================
+
   double get totalKas {
-    double total = 0;
+    double penghasilan = 0;
+    double penarikan = 0;
 
     for (final item in semuaSetoran) {
-      if (item['status']?.toString().toLowerCase() == 'disetujui') {
-        total += angka(item['total_nilai']);
+      if (item['status']?.toString().toLowerCase() ==
+          'disetujui') {
+        penghasilan += angka(item['total_nilai']);
       }
     }
 
-    return total;
+    for (final item in semuaPenarikan) {
+      penarikan += angka(item['nominal']);
+    }
+
+    return penghasilan - penarikan;
   }
 
-  // MENGHITUNG TOTAL BERAT SETORAN DISETUJUI
+  // ==========================================
+  // TOTAL BERAT
+  // ==========================================
+
   double get totalBerat {
     double total = 0;
 
     for (final item in semuaSetoran) {
-      if (item['status']?.toString().toLowerCase() == 'disetujui') {
+      if (item['status']?.toString().toLowerCase() ==
+          'disetujui') {
         total += angka(item['total_berat']);
       }
     }
@@ -242,12 +377,16 @@ class _RiwayatAdminScreenState extends State<RiwayatAdminScreen> {
     return total;
   }
 
-  // MENGHITUNG TOTAL PARTISIPASI KELAS
+  // ==========================================
+  // TOTAL PARTISIPASI KELAS
+  // ==========================================
+
   int get totalPartisipasi {
     final kelas = <String>{};
 
     for (final item in semuaSetoran) {
-      if (item['status']?.toString().toLowerCase() == 'disetujui') {
+      if (item['status']?.toString().toLowerCase() ==
+          'disetujui') {
         final nama = item['nama_kelas']?.toString();
 
         if (nama != null && nama.isNotEmpty) {
@@ -259,23 +398,30 @@ class _RiwayatAdminScreenState extends State<RiwayatAdminScreen> {
     return kelas.length;
   }
 
-  // PENGHASILAN BULAN INI
+  // ==========================================
+  // PENGHASILAN BULAN INI BERDASARKAN WIB
+  // ==========================================
+
   double get penghasilanBulanIni {
-    final sekarang = DateTime.now();
+    final sekarang = DateTime.now().toUtc().add(
+      const Duration(hours: 7),
+    );
 
     double total = 0;
 
     for (final item in semuaSetoran) {
-      if (item['status']?.toString().toLowerCase() != 'disetujui') {
+      if (item['status']?.toString().toLowerCase() !=
+          'disetujui') {
         continue;
       }
 
-      final tanggal = DateTime.tryParse(
-        item['tanggal']?.toString() ?? '',
+      final tanggal = parseTanggalWib(
+        getTanggalRiwayat(item),
       );
 
-      if (tanggal != null &&
-          tanggal.year == sekarang.year &&
+      if (tanggal == null) continue;
+
+      if (tanggal.year == sekarang.year &&
           tanggal.month == sekarang.month) {
         total += angka(item['total_nilai']);
       }
@@ -284,20 +430,31 @@ class _RiwayatAdminScreenState extends State<RiwayatAdminScreen> {
     return total;
   }
 
+  // ==========================================
   // REKAP PENGHASILAN PER KELAS
+  // ==========================================
+
   List<Map<String, dynamic>> get penghasilanKelas {
     final Map<String, Map<String, dynamic>> rekap = {};
 
     for (final item in semuaSetoran) {
-      if (item['status']?.toString().toLowerCase() != 'disetujui') {
+      if (item['status']?.toString().toLowerCase() !=
+          'disetujui') {
         continue;
       }
+
+      final idKelas = item['id_kelas'];
+
+      if (idKelas == null) continue;
 
       final namaKelas =
           item['nama_kelas']?.toString() ?? 'Kelas tidak diketahui';
 
-      rekap.putIfAbsent(namaKelas, () {
+      final key = idKelas.toString();
+
+      rekap.putIfAbsent(key, () {
         return {
+          'id_kelas': idKelas,
           'nama_kelas': namaKelas,
           'total_nilai': 0.0,
           'total_berat': 0.0,
@@ -305,13 +462,9 @@ class _RiwayatAdminScreenState extends State<RiwayatAdminScreen> {
         };
       });
 
-      rekap[namaKelas]!['total_nilai'] +=
-          angka(item['total_nilai']);
-
-      rekap[namaKelas]!['total_berat'] +=
-          angka(item['total_berat']);
-
-      rekap[namaKelas]!['jumlah_setoran'] += 1;
+      rekap[key]!['total_nilai'] += angka(item['total_nilai']);
+      rekap[key]!['total_berat'] += angka(item['total_berat']);
+      rekap[key]!['jumlah_setoran'] += 1;
     }
 
     final hasil = rekap.values.toList();
@@ -333,7 +486,10 @@ class _RiwayatAdminScreenState extends State<RiwayatAdminScreen> {
     }).toList();
   }
 
+  // ==========================================
   // TAB
+  // ==========================================
+
   Widget _seg(int i, String label, {String? badge}) {
     return Expanded(
       child: GestureDetector(
@@ -380,7 +536,10 @@ class _RiwayatAdminScreenState extends State<RiwayatAdminScreen> {
     );
   }
 
-  // RINGKASAN KAS
+  // ==========================================
+  // RINGKASAN
+  // ==========================================
+
   Widget _sum(
     String label,
     String value, {
@@ -430,7 +589,10 @@ class _RiwayatAdminScreenState extends State<RiwayatAdminScreen> {
     );
   }
 
+  // ==========================================
   // KARTU TOTAL KAS
+  // ==========================================
+
   Widget _summaryCard() {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -474,7 +636,7 @@ class _RiwayatAdminScreenState extends State<RiwayatAdminScreen> {
           ),
           const SizedBox(height: 10),
           const Text(
-            'Total Penghasilan Seluruh Kelas',
+            'Sisa Saldo Seluruh Kelas',
             style: TextStyle(
               color: Colors.white,
               fontSize: 11,
@@ -489,10 +651,7 @@ class _RiwayatAdminScreenState extends State<RiwayatAdminScreen> {
               fontWeight: FontWeight.w700,
             ),
           ),
-          const Divider(
-            color: Colors.white24,
-            height: 20,
-          ),
+          const Divider(color: Colors.white24, height: 20),
           Row(
             children: [
               _sum(
@@ -521,7 +680,10 @@ class _RiwayatAdminScreenState extends State<RiwayatAdminScreen> {
     );
   }
 
+  // ==========================================
   // SEARCH
+  // ==========================================
+
   Widget _searchField() {
     return Container(
       height: 46,
@@ -572,7 +734,10 @@ class _RiwayatAdminScreenState extends State<RiwayatAdminScreen> {
     );
   }
 
-  // BAGIAN RIWAYAT SETORAN
+  // ==========================================
+  // RIWAYAT SETORAN
+  // ==========================================
+
   Widget _riwayatContent() {
     final data = riwayatSetoran;
 
@@ -606,10 +771,8 @@ class _RiwayatAdminScreenState extends State<RiwayatAdminScreen> {
           ],
         ),
         const SizedBox(height: 12),
-
         if (data.isEmpty)
           _emptyState('Belum ada riwayat setoran.'),
-
         for (final item in data)
           _TxCard(
             item: item,
@@ -629,7 +792,10 @@ class _RiwayatAdminScreenState extends State<RiwayatAdminScreen> {
     );
   }
 
-  // BAGIAN PENGHASILAN KELAS
+  // ==========================================
+  // PENGHASILAN KELAS
+  // ==========================================
+
   Widget _penghasilanContent() {
     final data = penghasilanKelas;
 
@@ -663,21 +829,25 @@ class _RiwayatAdminScreenState extends State<RiwayatAdminScreen> {
           ],
         ),
         const SizedBox(height: 12),
-
         if (data.isEmpty)
           _emptyState('Belum ada penghasilan kelas.'),
-
         for (final item in data)
           _IncomeCard(
+            key: ValueKey(item['id_kelas']),
             item: item,
             formatRupiah: formatRupiah,
             formatBerat: formatBerat,
+            formatTanggal: formatTanggal,
+            onBerhasilTarik: loadRiwayat,
           ),
       ],
     );
   }
 
+  // ==========================================
   // EMPTY STATE
+  // ==========================================
+
   Widget _emptyState(String pesan) {
     return AdminCard(
       child: Padding(
@@ -704,7 +874,10 @@ class _RiwayatAdminScreenState extends State<RiwayatAdminScreen> {
     );
   }
 
+  // ==========================================
   // TARIF RESMI
+  // ==========================================
+
   Widget _tarifCard() {
     return Container(
       padding: const EdgeInsets.all(12),
@@ -753,6 +926,10 @@ class _RiwayatAdminScreenState extends State<RiwayatAdminScreen> {
       ),
     );
   }
+
+  // ==========================================
+  // BUILD
+  // ==========================================
 
   @override
   Widget build(BuildContext context) {
@@ -845,10 +1022,7 @@ class _RiwayatAdminScreenState extends State<RiwayatAdminScreen> {
                                   'Riwayat Setor\nSampah',
                                   badge: '${riwayatSetoran.length}',
                                 ),
-                                _seg(
-                                  1,
-                                  'Penghasilan\nKelas',
-                                ),
+                                _seg(1, 'Penghasilan\nKelas'),
                               ],
                             ),
                           ),
@@ -872,7 +1046,10 @@ class _RiwayatAdminScreenState extends State<RiwayatAdminScreen> {
   }
 }
 
+// ==========================================
 // KARTU RIWAYAT TRANSAKSI
+// ==========================================
+
 class _TxCard extends StatelessWidget {
   final Map<String, dynamic> item;
   final Map<String, dynamic>? verifikasi;
@@ -898,11 +1075,9 @@ class _TxCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final status = item['status']?.toString().toLowerCase() ?? '';
-
     final ditolak = status == 'ditolak';
 
     final idSetoran = item['id_setoran'];
-
     final detail = item['detail'] as List? ?? [];
 
     final namaKelas =
@@ -919,25 +1094,27 @@ class _TxCard extends StatelessWidget {
     final berat = _angka(item['total_berat']);
     final nilai = _angka(item['total_nilai']);
 
-    final catatan = verifikasi?['catatan']?.toString().isNotEmpty == true
-        ? verifikasi!['catatan'].toString()
-        : item['catatan']?.toString() ?? '';
+    final catatan =
+        verifikasi?['catatan']?.toString().isNotEmpty == true
+            ? verifikasi!['catatan'].toString()
+            : item['catatan']?.toString() ?? '';
 
     final inisial = namaKelas.isNotEmpty
-        ? namaKelas.split(' ').first.substring(
-              0,
-              namaKelas.split(' ').first.length > 2
-                  ? 2
-                  : namaKelas.split(' ').first.length,
-            )
+        ? namaKelas.substring(
+            0,
+            namaKelas.length > 2 ? 2 : namaKelas.length,
+          )
         : 'KS';
 
-    final warnaBg = ditolak
-        ? AdminColors.dangerBg
-        : AdminColors.primaryLight;
+    final warnaBg =
+        ditolak ? AdminColors.dangerBg : AdminColors.primaryLight;
 
     final warnaFg =
         ditolak ? AdminColors.danger : AdminColors.primary;
+
+    // Waktu verifikasi admin lebih diutamakan.
+    final tanggalRiwayat =
+        verifikasi?['tanggal'] ?? item['tanggal'];
 
     return GestureDetector(
       onTap: () {
@@ -993,7 +1170,7 @@ class _TxCard extends StatelessWidget {
                           const SizedBox(width: 4),
                           Expanded(
                             child: Text(
-                              formatTanggal(item['tanggal']),
+                              formatTanggal(tanggalRiwayat),
                               style: const TextStyle(fontSize: 10),
                             ),
                           ),
@@ -1018,7 +1195,6 @@ class _TxCard extends StatelessWidget {
                 ),
               ],
             ),
-
             if (ditolak && catatan.isNotEmpty) ...[
               const SizedBox(height: 10),
               Container(
@@ -1063,9 +1239,7 @@ class _TxCard extends StatelessWidget {
                 ),
               ),
             ],
-
             const Divider(height: 22),
-
             Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
@@ -1140,31 +1314,433 @@ class _TxCard extends StatelessWidget {
   }
 }
 
-// KARTU PENGHASILAN PER KELAS
-class _IncomeCard extends StatelessWidget {
+// ==========================================
+// KARTU PENGHASILAN KELAS + TARIK TUNAI
+// ==========================================
+
+class _IncomeCard extends StatefulWidget {
   final Map<String, dynamic> item;
 
   final String Function(double) formatRupiah;
   final String Function(double) formatBerat;
+  final String Function(dynamic) formatTanggal;
+
+  final Future<void> Function() onBerhasilTarik;
 
   const _IncomeCard({
+    super.key,
     required this.item,
     required this.formatRupiah,
     required this.formatBerat,
+    required this.formatTanggal,
+    required this.onBerhasilTarik,
   });
 
   @override
+  State<_IncomeCard> createState() => _IncomeCardState();
+}
+
+class _IncomeCardState extends State<_IncomeCard> {
+  final PenarikanService _penarikanService = PenarikanService();
+
+  bool _sedangMemproses = false;
+
+  late Future<Map<String, dynamic>> _saldoFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _muatSaldo();
+  }
+
+  void _muatSaldo() {
+    final idKelas = int.tryParse(
+      widget.item['id_kelas'].toString(),
+    );
+
+    if (idKelas == null) {
+      _saldoFuture = Future.error('ID kelas tidak ditemukan.');
+      return;
+    }
+
+    _saldoFuture = _penarikanService.getSaldoKelas(idKelas);
+  }
+
+  void _refreshSaldo() {
+    setState(() {
+      _muatSaldo();
+    });
+  }
+
+  Future<void> _pilihPenarikan(double saldo) async {
+    if (saldo <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Saldo kelas tidak tersedia untuk ditarik.'),
+        ),
+      );
+      return;
+    }
+
+    final idKelas = int.tryParse(
+      widget.item['id_kelas'].toString(),
+    );
+
+    if (idKelas == null) return;
+
+    final nominalController = TextEditingController();
+    int? nominalTerpilih;
+
+    final pilihan = [10000, 20000, 30000, 40000, 50000, 100000];
+
+    final nominal = await showDialog<int>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final custom = nominalController.text.isNotEmpty;
+            final nominalCustom =
+                int.tryParse(nominalController.text) ?? 0;
+
+            final nominalAktif =
+                custom ? nominalCustom : (nominalTerpilih ?? 0);
+
+            final valid = nominalAktif > 0 &&
+                nominalAktif <= saldo &&
+                nominalAktif % 1000 == 0;
+
+            return AlertDialog(
+              title: const Text(
+                'Tarik Tunai',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.item['nama_kelas']?.toString() ?? '-',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    const Text(
+                      'Saldo tersedia',
+                      style: TextStyle(
+                        color: Colors.grey,
+                        fontSize: 12,
+                      ),
+                    ),
+                    Text(
+                      widget.formatRupiah(saldo),
+                      style: const TextStyle(
+                        color: AdminColors.primary,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    const Text(
+                      'Pilih nominal penarikan',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: pilihan.map((angka) {
+                        final aktif = nominalTerpilih == angka &&
+                            !custom;
+
+                        return ChoiceChip(
+                          label: Text('Rp ${angka ~/ 1000}rb'),
+                          selected: aktif,
+                          onSelected: (_) {
+                            setDialogState(() {
+                              nominalTerpilih = angka;
+                              nominalController.clear();
+                            });
+                          },
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Atau masukkan nominal sendiri',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(height: 7),
+                    TextField(
+                      controller: nominalController,
+                      keyboardType: TextInputType.number,
+                      onChanged: (_) {
+                        setDialogState(() {
+                          nominalTerpilih = null;
+                        });
+                      },
+                      decoration: const InputDecoration(
+                        prefixText: 'Rp ',
+                        hintText: 'Contoh: 75000',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                    ),
+                    if (nominalAktif > saldo) ...[
+                      const SizedBox(height: 7),
+                      const Text(
+                        'Nominal melebihi saldo tersedia.',
+                        style: TextStyle(
+                          color: Colors.red,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                    if (nominalAktif > 0 &&
+                        nominalAktif % 1000 != 0) ...[
+                      const SizedBox(height: 7),
+                      const Text(
+                        'Nominal harus kelipatan Rp1.000.',
+                        style: TextStyle(
+                          color: Colors.red,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(dialogContext);
+                  },
+                  child: const Text('Batal'),
+                ),
+                ElevatedButton(
+                  onPressed: valid
+                      ? () {
+                          Navigator.pop(dialogContext, nominalAktif);
+                        }
+                      : null,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AdminColors.primary,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text('Lanjutkan'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    nominalController.dispose();
+
+    if (nominal == null || !mounted) return;
+
+    final konfirmasi = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Konfirmasi Penarikan'),
+          content: Text(
+            'Apakah uang tunai sebesar '
+            '${widget.formatRupiah(nominal.toDouble())} '
+            'sudah diberikan kepada kelas '
+            '${widget.item['nama_kelas']}?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(dialogContext, false);
+              },
+              child: const Text('Belum'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(dialogContext, true);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AdminColors.primary,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Ya, Konfirmasi'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (konfirmasi != true || !mounted) return;
+
+    await _prosesPenarikan(idKelas, nominal);
+  }
+
+  Future<void> _prosesPenarikan(
+    int idKelas,
+    int nominal,
+  ) async {
+    setState(() {
+      _sedangMemproses = true;
+    });
+
+    try {
+      await _penarikanService.tarikTunai(
+        idKelas: idKelas,
+        nominal: nominal,
+        keterangan: 'Penarikan tunai kas kelas',
+      );
+
+      if (!mounted) return;
+
+      _refreshSaldo();
+
+      await widget.onBerhasilTarik();
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Penarikan ${widget.formatRupiah(nominal.toDouble())} berhasil dicatat.',
+          ),
+          backgroundColor: AdminColors.primary,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Penarikan gagal: $e'),
+          backgroundColor: AdminColors.danger,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _sedangMemproses = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _lihatRiwayat() async {
+    final idKelas = int.tryParse(
+      widget.item['id_kelas'].toString(),
+    );
+
+    if (idKelas == null) return;
+
+    try {
+      final data = await _penarikanService.getRiwayatPenarikan(
+        idKelas,
+      );
+
+      if (!mounted) return;
+
+      showDialog(
+        context: context,
+        builder: (dialogContext) {
+          return AlertDialog(
+            title: const Text(
+              'Riwayat Penarikan',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
+            content: SizedBox(
+              width: double.maxFinite,
+              child: data.isEmpty
+                  ? const Text('Belum ada penarikan tunai.')
+                  : ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: data.length,
+                      separatorBuilder: (_, __) =>
+                          const Divider(height: 18),
+                      itemBuilder: (context, index) {
+                        final item = data[index];
+                        final nominal =
+                            double.tryParse(
+                              item['nominal'].toString(),
+                            ) ??
+                            0;
+
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              widget.formatRupiah(nominal),
+                              style: const TextStyle(
+                                color: AdminColors.primary,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 15,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              widget.formatTanggal(item['tanggal']),
+                              style: const TextStyle(
+                                color: AdminColors.muted,
+                                fontSize: 11,
+                              ),
+                            ),
+                            Text(
+                              item['keterangan']?.toString() ??
+                                  'Penarikan tunai',
+                              style: const TextStyle(fontSize: 11),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Tutup'),
+              ),
+            ],
+          );
+        },
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Gagal mengambil riwayat: $e'),
+        ),
+      );
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final namaKelas = item['nama_kelas']?.toString() ?? '-';
+    final namaKelas =
+        widget.item['nama_kelas']?.toString() ?? '-';
 
     final totalNilai =
-        double.tryParse(item['total_nilai'].toString()) ?? 0;
+        double.tryParse(
+          widget.item['total_nilai'].toString(),
+        ) ??
+        0;
 
     final totalBerat =
-        double.tryParse(item['total_berat'].toString()) ?? 0;
+        double.tryParse(
+          widget.item['total_berat'].toString(),
+        ) ??
+        0;
 
     final jumlahSetoran =
-        int.tryParse(item['jumlah_setoran'].toString()) ?? 0;
+        int.tryParse(
+          widget.item['jumlah_setoran'].toString(),
+        ) ??
+        0;
 
     final inisial = namaKelas.isNotEmpty
         ? namaKelas.substring(
@@ -1174,58 +1750,220 @@ class _IncomeCard extends StatelessWidget {
         : 'KS';
 
     return AdminCard(
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          AdminInitial(
-            inisial,
-            bg: AdminColors.primaryLight,
-            fg: AdminColors.primary,
-            size: 42,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  namaKelas,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '$jumlahSetoran setoran • ${formatBerat(totalBerat)} Kg',
-                  style: const TextStyle(
-                    fontSize: 10,
-                    color: AdminColors.muted,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
+          Row(
             children: [
-              const Text(
-                'Total Penghasilan',
-                style: TextStyle(
-                  fontSize: 9,
-                  color: AdminColors.muted,
+              AdminInitial(
+                inisial,
+                bg: AdminColors.primaryLight,
+                fg: AdminColors.primary,
+                size: 42,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      namaKelas,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '$jumlahSetoran setoran • '
+                      '${widget.formatBerat(totalBerat)} Kg',
+                      style: const TextStyle(
+                        fontSize: 10,
+                        color: AdminColors.muted,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 3),
-              Text(
-                formatRupiah(totalNilai),
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: AdminColors.primary,
-                ),
+              const SizedBox(width: 8),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  const Text(
+                    'Total Penghasilan',
+                    style: TextStyle(
+                      fontSize: 9,
+                      color: AdminColors.muted,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    widget.formatRupiah(totalNilai),
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: AdminColors.primary,
+                    ),
+                  ),
+                ],
               ),
             ],
+          ),
+          const Divider(height: 24),
+          FutureBuilder<Map<String, dynamic>>(
+            future: _saldoFuture,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState ==
+                  ConnectionState.waiting) {
+                return const Padding(
+                  padding: EdgeInsets.all(10),
+                  child: Center(
+                    child: SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                      ),
+                    ),
+                  ),
+                );
+              }
+
+              if (snapshot.hasError) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Saldo belum dapat dimuat.',
+                      style: TextStyle(
+                        color: AdminColors.danger,
+                        fontSize: 11,
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: _refreshSaldo,
+                      child: const Text('Coba lagi'),
+                    ),
+                  ],
+                );
+              }
+
+              final saldo = double.tryParse(
+                    snapshot.data?['saldo_tersedia']
+                            ?.toString() ??
+                        '0',
+                  ) ??
+                  0;
+
+              final totalPenarikan = double.tryParse(
+                    snapshot.data?['total_penarikan']
+                            ?.toString() ??
+                        '0',
+                  ) ??
+                  0;
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment:
+                        MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Total Sudah Ditarik',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: AdminColors.muted,
+                        ),
+                      ),
+                      Text(
+                        widget.formatRupiah(totalPenarikan),
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 9),
+                  const Text(
+                    'Saldo Tersedia',
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: AdminColors.muted,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    widget.formatRupiah(saldo),
+                    style: const TextStyle(
+                      fontSize: 21,
+                      fontWeight: FontWeight.w700,
+                      color: AdminColors.primary,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: _sedangMemproses || saldo <= 0
+                              ? null
+                              : () => _pilihPenarikan(saldo),
+                          icon: _sedangMemproses
+                              ? const SizedBox(
+                                  width: 15,
+                                  height: 15,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Icon(
+                                  Icons.payments_outlined,
+                                  size: 17,
+                                ),
+                          label: Text(
+                            _sedangMemproses
+                                ? 'Memproses...'
+                                : 'Tarik Tunai',
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AdminColors.primary,
+                            foregroundColor: Colors.white,
+                            disabledBackgroundColor:
+                                AdminColors.border,
+                            disabledForegroundColor:
+                                AdminColors.muted,
+                            padding: const EdgeInsets.symmetric(
+                              vertical: 11,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      OutlinedButton(
+                        onPressed: _lihatRiwayat,
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AdminColors.primary,
+                          side: const BorderSide(
+                            color: AdminColors.primary,
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 11,
+                            horizontal: 12,
+                          ),
+                        ),
+                        child: const Icon(
+                          Icons.history,
+                          size: 18,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              );
+            },
           ),
         ],
       ),
